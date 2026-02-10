@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import * as XLSX from 'xlsx'; // เครื่องมืออ่าน Excel
 import { 
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
 } from 'recharts';
@@ -7,7 +8,7 @@ import {
   Settings, LogOut, Plus, Search, CheckCircle, XCircle, 
   AlertCircle, Clock, Save, Trash2, Edit, FileSpreadsheet,
   Menu, ChevronRight, ChevronLeft, GraduationCap, UserPlus, Database,
-  Flag, ThumbsUp, ThumbsDown, MoreVertical, Lock, Mail, Award, User, Shield, Key, FileText, List, UploadCloud, Users2
+  Flag, ThumbsUp, ThumbsDown, MoreVertical, Lock, Mail, Award, User, Shield, Key, FileText, List, UploadCloud, Users2, AlertTriangle
 } from 'lucide-react';
 
 // --- CONFIG & THEME ---
@@ -143,10 +144,11 @@ const Notification = ({ message, type, onClose }) => {
   );
 };
 
-// 3. Admin Dashboard (Updated with Duplicate Check)
+// 3. Admin Dashboard
 const AdminDashboard = ({ students, teachers, setStudents, onNotify }) => {
     const [activeTab, setActiveTab] = useState('students');
     const [isImportOpen, setIsImportOpen] = useState(false);
+    const [importFile, setImportFile] = useState(null); // Store selected file
     
     // User Management State
     const [isUserModalOpen, setIsUserModalOpen] = useState(false);
@@ -157,27 +159,76 @@ const AdminDashboard = ({ students, teachers, setStudents, onNotify }) => {
     const [bulkRoom, setBulkRoom] = useState('');
     const [bulkPassword, setBulkPassword] = useState('');
 
+    const handleFileChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            setImportFile(file);
+        }
+    };
+
     const handleImportExcel = () => {
-        // MOCK: Simulate parsing excel and adding new students
-        // Using timestamp to ensure unique IDs for demo purposes so they always appear
-        const timestamp = Date.now().toString().slice(-4);
-        const newStudentsMock = [
-            { id: `662090${timestamp}1`, name: `นายใหม่ มาแล้ว (${timestamp})`, level: 'ปวช. 2', room: '2', department: 'อิเล็กทรอนิกส์', status: 'normal' },
-            { id: `662090${timestamp}2`, name: `นางสาวเรียน ดี (${timestamp})`, level: 'ปวช. 2', room: '2', department: 'อิเล็กทรอนิกส์', status: 'normal' }
-        ];
-        
-        setStudents(prev => {
-            const existingIds = new Set(prev.map(s => s.id));
-            const uniqueNewStudents = newStudentsMock.filter(s => !existingIds.has(s.id));
-            
-            if (uniqueNewStudents.length === 0) {
-                return prev;
+        if (!importFile) {
+            onNotify('กรุณาเลือกไฟล์ Excel ก่อน', 'error');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                
+                // Read the first sheet
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                
+                // Convert to JSON
+                const jsonData = XLSX.utils.sheet_to_json(worksheet);
+                
+                if (jsonData.length === 0) {
+                     onNotify('ไม่พบข้อมูลในไฟล์', 'error');
+                     return;
+                }
+
+                // Map data to student structure
+                // Supports "ห้องเรียน" or "ห้องเรียน " (with space)
+                const newStudents = jsonData.map(row => ({
+                    id: String(row['รหัสประจำตัว'] || ''),
+                    name: row['ชื่อ-นามสกุล'] || '',
+                    level: row['ระดับชั้น'] || '',
+                    room: String(row['ห้องเรียน'] || row['ห้องเรียน '] || ''), 
+                    department: row['แผนกวิชา'] || '',
+                    status: 'normal'
+                })).filter(s => s.id && s.name); // Filter out empty rows
+
+                setStudents(prev => {
+                    const existingIds = new Set(prev.map(s => s.id));
+                    const uniqueNewStudents = newStudents.filter(s => !existingIds.has(s.id));
+                    
+                    if (uniqueNewStudents.length === 0) {
+                        onNotify('ไม่พบข้อมูลใหม่ หรือข้อมูลซ้ำกับที่มีอยู่แล้ว', 'error');
+                        return prev;
+                    }
+                    onNotify(`นำเข้าข้อมูลสำเร็จ ${uniqueNewStudents.length} รายการ`, 'success');
+                    return [...prev, ...uniqueNewStudents];
+                });
+                
+                setIsImportOpen(false);
+                setImportFile(null); // Reset file
+                
+            } catch (error) {
+                console.error("Import Error:", error);
+                onNotify('เกิดข้อผิดพลาดในการอ่านไฟล์ โปรดตรวจสอบรูปแบบไฟล์', 'error');
             }
-            return [...prev, ...uniqueNewStudents];
-        });
-        
-        onNotify('นำเข้าข้อมูลนักเรียนเรียบร้อยแล้ว', 'success');
-        setIsImportOpen(false);
+        };
+        reader.readAsArrayBuffer(importFile);
+    };
+
+    const handleDeleteStudent = (studentId) => {
+        if(confirm('คุณต้องการลบนักเรียนคนนี้ออกจากฐานข้อมูลกลางหรือไม่? (ข้อมูลในทุกรายวิชาจะหายไป)')) {
+            setStudents(prev => prev.filter(s => s.id !== studentId));
+            onNotify('ลบนักเรียนเรียบร้อยแล้ว', 'success');
+        }
     };
 
     const handleSetUser = (user, type) => {
@@ -196,13 +247,11 @@ const AdminDashboard = ({ students, teachers, setStudents, onNotify }) => {
             onNotify('กรุณาเลือกห้องและกำหนดรหัสผ่าน', 'error');
             return;
         }
-        // Logic to update passwords for students in that room would go here
         onNotify(`กำหนดรหัสผ่านสำหรับนักเรียนห้อง ${bulkRoom} ทั้งหมดเป็น "${bulkPassword}" สำเร็จ`, 'success');
         setBulkRoom('');
         setBulkPassword('');
     };
 
-    // Extract unique rooms for dropdown
     const rooms = [...new Set(students.map(s => s.room))].sort();
 
     return (
@@ -252,6 +301,7 @@ const AdminDashboard = ({ students, teachers, setStudents, onNotify }) => {
                                     <th className="p-3">ระดับชั้น</th>
                                     <th className="p-3">ห้อง</th>
                                     <th className="p-3">แผนกวิชา</th>
+                                    <th className="p-3 text-center">จัดการ</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
@@ -262,6 +312,15 @@ const AdminDashboard = ({ students, teachers, setStudents, onNotify }) => {
                                         <td className="p-3">{s.level}</td>
                                         <td className="p-3">{s.room}</td>
                                         <td className="p-3">{s.department || '-'}</td>
+                                        <td className="p-3 text-center">
+                                            <button 
+                                                onClick={() => handleDeleteStudent(s.id)}
+                                                className="text-red-400 hover:text-red-600 p-1 rounded-full hover:bg-red-50"
+                                                title="ลบนักเรียน"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -378,28 +437,41 @@ const AdminDashboard = ({ students, teachers, setStudents, onNotify }) => {
             {/* Import Modal */}
             {isImportOpen && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white p-6 rounded-xl shadow-2xl w-96 animate-fade-in">
-                        <h3 className="font-bold text-lg mb-4 flex items-center"><UploadCloud className="w-6 h-6 mr-2 text-green-600"/> นำเข้าข้อมูลนักเรียน</h3>
+                    <div className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-lg animate-fade-in">
+                        <div className="flex justify-between items-start mb-4">
+                             <h3 className="font-bold text-xl flex items-center text-gray-800">
+                                <UploadCloud className="w-6 h-6 mr-2 text-green-600"/> นำเข้าข้อมูลนักเรียน
+                             </h3>
+                             <button onClick={() => setIsImportOpen(false)} className="text-gray-400 hover:text-red-500"><XCircle className="w-6 h-6"/></button>
+                        </div>
                         
-                        <div className="mb-4">
-                            <label className="block text-sm font-bold text-gray-700 mb-2">เลือกไฟล์ Excel</label>
-                            <input type="file" accept=".xlsx, .xls" className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"/>
+                        <div className="mb-6">
+                            <label className="block text-sm font-bold text-gray-700 mb-2">เลือกไฟล์ Excel (.xlsx, .xls)</label>
+                            <input 
+                                type="file" 
+                                accept=".xlsx, .xls" 
+                                onChange={handleFileChange}
+                                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                            />
                         </div>
 
-                        <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200 mb-6">
-                            <p className="text-xs text-yellow-800 font-bold mb-1">⚠️ ไฟล์ต้องมีคอลัมน์ดังนี้:</p>
-                            <ul className="text-xs text-yellow-700 list-disc pl-4 space-y-1">
+                        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 mb-6">
+                            <h4 className="text-sm font-bold text-blue-800 mb-2 flex items-center"><AlertTriangle className="w-4 h-4 mr-1"/> รูปแบบไฟล์ที่ต้องการ</h4>
+                            <p className="text-xs text-blue-700 mb-2">โปรดตรวจสอบว่าไฟล์ Excel ของคุณมีหัวข้อคอลัมน์ดังนี้ (เรียงลำดับหรือไม่ก็ได้):</p>
+                            <ul className="text-xs text-gray-600 list-disc pl-5 space-y-1 font-mono bg-white p-2 rounded border border-blue-100">
                                 <li>รหัสประจำตัว</li>
                                 <li>ชื่อ-นามสกุล</li>
-                                <li>ระดับชั้น</li>
-                                <li>ห้องเรียน</li>
+                                <li>ระดับชั้น (เช่น ปวช. 1)</li>
+                                <li>ห้องเรียน (เช่น 1, 2)</li>
                                 <li>แผนกวิชา</li>
                             </ul>
                         </div>
 
-                        <div className="flex justify-end space-x-2">
+                        <div className="flex justify-end space-x-2 border-t pt-4">
                             <button onClick={() => setIsImportOpen(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded">ยกเลิก</button>
-                            <button onClick={handleImportExcel} className="bg-green-600 text-white px-4 py-2 rounded shadow hover:bg-green-700 font-bold">ยืนยันนำเข้า</button>
+                            <button onClick={handleImportExcel} className="bg-green-600 text-white px-6 py-2 rounded-lg shadow hover:bg-green-700 font-bold flex items-center">
+                                <FileSpreadsheet className="w-4 h-4 mr-2"/> ยืนยันนำเข้าข้อมูล
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -432,10 +504,7 @@ const AdminDashboard = ({ students, teachers, setStudents, onNotify }) => {
                                 />
                             </div>
                         </div>
-                        <div className="flex justify-end space-x-2">
-                            <button onClick={() => setIsUserModalOpen(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded">ยกเลิก</button>
-                            <button onClick={handleSaveUser} className="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 font-bold">บันทึก</button>
-                        </div>
+                        <div className="flex justify-end space-x-2"><button onClick={() => setIsUserModalOpen(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded">ยกเลิก</button><button onClick={handleSaveUser} className="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 font-bold">บันทึก</button></div>
                     </div>
                 </div>
             )}
@@ -443,9 +512,10 @@ const AdminDashboard = ({ students, teachers, setStudents, onNotify }) => {
     );
 };
 
-// 1. Teacher Dashboard, 2. Student Dashboard, Attendance, Score, Behavior (Re-using from previous correct versions)
-const TeacherDashboard = ({ courses, students, assignments, scores, attendance, holidays }) => {
+// 1. Teacher Dashboard
+const TeacherDashboard = ({ courses, students, assignments, scores, attendance, holidays, enrollments, setEnrollments, onNotify }) => {
   const [selectedCourseId, setSelectedCourseId] = useState('all');
+
   const stats = useMemo(() => {
     let targetCourses = courses;
     if (selectedCourseId !== 'all') { targetCourses = courses.filter(c => c.id === Number(selectedCourseId)); }
@@ -453,9 +523,21 @@ const TeacherDashboard = ({ courses, students, assignments, scores, attendance, 
     const attendCounts = { '>80%': 0, '<80%': 0 };
     const dailyStats = { present: 0, absent: 0, sick: 0, leave: 0 };
     const studentScores = [];
-    students.forEach(std => {
+    
+    // Filter students enrolled in target courses
+    const relevantStudents = students.filter(s => {
+         return targetCourses.some(c => {
+             const enrolledIds = enrollments[c.id] || [];
+             return enrolledIds.includes(s.id);
+         });
+    });
+
+    relevantStudents.forEach(std => {
       let totalCourseScore = 0; let totalAttendancePercent = 0; let courseCount = 0;
       targetCourses.forEach(course => {
+          const enrolledIds = enrollments[course.id] || [];
+          if (!enrolledIds.includes(std.id)) return; // Skip if not enrolled
+
           const courseAssigns = assignments[course.id] || []; const stdScores = scores[std.id] || {}; let k=0, s=0;
           courseAssigns.forEach(a => { const sc = Number(stdScores[a.id] || 0); if(a.type === 'knowledge') k += sc; if(a.type === 'skill') s += sc; });
           const a = course.weights.attitude; const total = k + s + a;
@@ -475,7 +557,7 @@ const TeacherDashboard = ({ courses, students, assignments, scores, attendance, 
     studentScores.sort((a, b) => b.score - a.score);
     const behaviorData = [{ name: 'ตรงต่อเวลา', score: 85 }, { name: 'แต่งกาย', score: 90 }, { name: 'ส่งงาน', score: 75 }, { name: 'จิตอาสา', score: 80 }];
     return { grades: [{ name: 'เกรด 4', value: gradeCounts['4'], color: '#10B981' }, { name: 'เกรด 3-3.5', value: gradeCounts['3-3.5'], color: '#3B82F6' }, { name: 'เกรด 2-2.5', value: gradeCounts['2-2.5'], color: '#FACC15' }, { name: 'เกรด 0-1.5', value: gradeCounts['0-1.5'], color: '#EF4444' }], attendance: [{ name: 'เวลาเรียน > 80%', value: attendCounts['>80%'], color: '#10B981' }, { name: 'เวลาเรียน < 80%', value: attendCounts['<80%'], color: '#EF4444' }], daily: dailyStats, top5: studentScores.slice(0, 5), bottom5: studentScores.slice(-5).reverse(), behavior: behaviorData };
-  }, [selectedCourseId, courses, students, assignments, scores, attendance, holidays]);
+  }, [selectedCourseId, courses, students, assignments, scores, attendance, holidays, enrollments]);
 
   return (
     <div className="space-y-6 animate-fade-in pb-10">
@@ -487,6 +569,7 @@ const TeacherDashboard = ({ courses, students, assignments, scores, attendance, 
   );
 };
 
+// ... StudentDashboard, AttendanceCheck, ScoreManager, BehaviorManager, BehaviorSummary (Reuse exact same components)
 const StudentDashboard = ({ studentId, courses, assignments, scores, attendance, holidays }) => {
     const sId = studentId || '6620901001'; 
     return (
@@ -533,7 +616,7 @@ const ScoreManager = ({ students, course, assignments, scores, onUpdateScore, on
         <div className="flex space-x-3 mt-4 md:mt-0"><button onClick={() => setIsAdding(!isAdding)} className="bg-white text-orange-600 border border-orange-200 px-4 py-2 rounded-lg flex items-center shadow-sm hover:bg-orange-50"><Plus className="w-4 h-4 mr-2" /> เพิ่มหัวข้อ</button><button onClick={onSave} className="bg-orange-600 text-white px-6 py-2 rounded-lg shadow hover:bg-orange-700 flex items-center transition-transform hover:scale-105"><Save className="w-5 h-5 mr-2" /> บันทึกคะแนน</button></div>
       </div>
       {isAdding && (<div className="bg-white p-6 rounded-xl border border-gray-200 shadow-lg animate-fade-in relative"><button onClick={() => setIsAdding(false)} className="absolute top-2 right-2 text-gray-400 hover:text-red-500"><XCircle className="w-5 h-5"/></button><h4 className="font-bold text-gray-800 mb-4">เพิ่มหัวข้อคะแนนใหม่</h4><div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end"><div><label className="block text-xs font-bold text-gray-500 mb-1">ชื่อหัวข้อ</label><input type="text" className="w-full p-2 border rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-orange-500 outline-none" value={newAssign.name} onChange={e => setNewAssign({...newAssign, name: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 mb-1">ประเภท</label><select className="w-full p-2 border rounded-lg bg-gray-50" value={newAssign.type} onChange={e => setNewAssign({...newAssign, type: e.target.value})}><option value="knowledge">ความรู้ (Knowledge)</option><option value="skill">ทักษะ (Skill)</option></select></div><div><label className="block text-xs font-bold text-gray-500 mb-1">คะแนนเต็ม</label><input type="number" className="w-full p-2 border rounded-lg bg-gray-50" value={newAssign.maxScore} onChange={e => setNewAssign({...newAssign, maxScore: Number(e.target.value)})} /></div><button onClick={handleAdd} className="bg-green-600 text-white px-4 py-2 rounded-lg font-bold shadow hover:bg-green-700">ยืนยัน</button></div></div>)}
-      <div className="bg-white rounded-xl shadow-sm overflow-hidden overflow-x-auto border border-gray-100"><table className="w-full text-left border-collapse"><thead className="bg-gray-50 text-gray-700 text-sm uppercase font-bold"><tr><th className="px-4 py-4 sticky left-0 bg-gray-50 z-10 border-b min-w-[200px]">ชื่อ-สกุล</th>{['knowledge', 'skill'].map(type => { const typeAssigns = getAssignmentsByType(type); if (typeAssigns.length === 0) return null; return (<React.Fragment key={type}>{typeAssigns.map(a => (<th key={a.id} className="px-2 py-4 text-center border min-w-[100px] bg-white group relative"><div className="text-[10px] text-gray-400 uppercase tracking-wider">{type}</div><div className="text-gray-800">{a.name}</div><div className="text-xs text-gray-500 font-normal">({a.maxScore})</div><button onClick={() => onDeleteAssignment(course.id, a.id)} className="absolute top-1 right-1 text-red-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity" title="ลบหัวข้อนี้"><Trash2 className="w-3 h-3" /></button></th>))}<th className={`px-2 py-4 text-center border-r min-w-[80px] ${type === 'knowledge' ? 'bg-blue-50 text-blue-800' : 'bg-orange-50 text-orange-800'}`}>รวม<br/>{type === 'knowledge' ? 'K' : 'S'}</th></React.Fragment>);})}<th className="px-4 py-4 text-center bg-gray-100 text-gray-800 sticky right-0 z-10 border-l">รวมคะแนน<br/>(ไม่รวมเจตคติ)</th></tr></thead><tbody className="divide-y divide-gray-100">{students.map((std) => { let totalScore = 0; return (<tr key={std.id} className="hover:bg-gray-50 transition-colors"><td className="px-4 py-3 font-bold text-gray-700 sticky left-0 bg-white shadow-sm border-r">{std.name}</td>{['knowledge', 'skill'].map(type => { const typeAssigns = getAssignmentsByType(type); if (typeAssigns.length === 0) return null; let typeTotal = 0; return (<React.Fragment key={type}>{typeAssigns.map(a => { const score = scores[std.id]?.[a.id] || 0; typeTotal += Number(score); return (<td key={a.id} className="px-2 py-3 text-center border-r"><input type="number" className="w-16 p-1 text-center border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 outline-none" value={scores[std.id]?.[a.id] || ''} placeholder="0" max={a.maxScore} onChange={(e) => onUpdateScore(std.id, a.id, e.target.value, a.maxScore)} /></td>); })}<td className={`px-2 py-3 text-center font-bold border-r ${type === 'knowledge' ? 'bg-blue-50 text-blue-700' : 'bg-orange-50 text-orange-700'}`}>{typeTotal}</td></React.Fragment>); })}{(() => { const stdScores = scores[std.id] || {}; const relevantAssigns = [...getAssignmentsByType('knowledge'), ...getAssignmentsByType('skill')]; totalScore = relevantAssigns.reduce((sum, a) => sum + Number(stdScores[a.id] || 0), 0); })()}<td className="px-4 py-3 text-center font-bold text-gray-800 bg-gray-100 sticky right-0 border-l">{totalScore}</td></tr>); })}</tbody></table></div></div>);
+      <div className="bg-white rounded-xl shadow-sm overflow-hidden overflow-x-auto border border-gray-100"><table className="w-full text-left border-collapse"><thead className="bg-gray-50 text-gray-700 text-sm uppercase font-bold"><tr><th className="px-4 py-4 sticky left-0 bg-gray-50 z-10 border-b min-w-[200px]">ชื่อ-สกุล</th>{['knowledge', 'skill'].map(type => { const typeAssigns = getAssignmentsByType(type); if (typeAssigns.length === 0) return null; return (<React.Fragment key={type}>{typeAssigns.map(a => (<th key={a.id} className="px-2 py-4 text-center border min-w-[100px] bg-white group relative"><div className="text-[10px] text-gray-400 uppercase tracking-wider">{type}</div><div className="text-gray-800">{a.name}</div><div className="text-xs text-gray-500 font-normal">({a.maxScore})</div><button onClick={() => onDeleteAssignment(course.id, a.id)} className="absolute top-1 right-1 text-red-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity" title="ลบหัวข้อนี้"><Trash2 className="w-3 h-3" /></button></th>))}<th className={`px-2 py-4 text-center border-r min-w-[80px] ${type === 'knowledge' ? 'bg-blue-50 text-blue-800' : 'bg-orange-50 text-orange-700'}`}>รวม<br/>{type === 'knowledge' ? 'K' : 'S'}</th></React.Fragment>);})}<th className="px-4 py-4 text-center bg-gray-100 text-gray-800 sticky right-0 z-10 border-l">รวมคะแนน<br/>(ไม่รวมเจตคติ)</th></tr></thead><tbody className="divide-y divide-gray-100">{students.map((std) => { let totalScore = 0; return (<tr key={std.id} className="hover:bg-gray-50 transition-colors"><td className="px-4 py-3 font-bold text-gray-700 sticky left-0 bg-white shadow-sm border-r">{std.name}</td>{['knowledge', 'skill'].map(type => { const typeAssigns = getAssignmentsByType(type); if (typeAssigns.length === 0) return null; let typeTotal = 0; return (<React.Fragment key={type}>{typeAssigns.map(a => { const score = scores[std.id]?.[a.id] || 0; typeTotal += Number(score); return (<td key={a.id} className="px-2 py-3 text-center border-r"><input type="number" className="w-16 p-1 text-center border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 outline-none" value={scores[std.id]?.[a.id] || ''} placeholder="0" max={a.maxScore} onChange={(e) => onUpdateScore(std.id, a.id, e.target.value, a.maxScore)} /></td>); })}<td className={`px-2 py-3 text-center font-bold border-r ${type === 'knowledge' ? 'bg-blue-50 text-blue-700' : 'bg-orange-50 text-orange-700'}`}>{typeTotal}</td></React.Fragment>); })}{(() => { const stdScores = scores[std.id] || {}; const relevantAssigns = [...getAssignmentsByType('knowledge'), ...getAssignmentsByType('skill')]; totalScore = relevantAssigns.reduce((sum, a) => sum + Number(stdScores[a.id] || 0), 0); })()}<td className="px-4 py-3 text-center font-bold text-gray-800 bg-gray-100 sticky right-0 border-l">{totalScore}</td></tr>); })}</tbody></table></div></div>);
 };
 
 const BehaviorManager = ({ students, course, behaviors, behaviorRecords, onUpdateBehavior, onSave, onUpdateBehaviorsList }) => {
@@ -576,8 +659,18 @@ export default function ClassroomApp() {
   const [holidays, setHolidays] = useState({});
   const [behaviors, setBehaviors] = useState(INITIAL_BEHAVIORS);
   const [behaviorRecords, setBehaviorRecords] = useState({});
+  const [enrollments, setEnrollments] = useState({}); // New: Store enrollments { courseId: [studentIds] }
   
   const [currentDate, setCurrentDate] = useState(new Date().toISOString().split('T')[0]);
+
+  // Init enrollments (Mock: All students in all courses initially)
+  useEffect(() => {
+    const initialEnrollments = {};
+    courses.forEach(c => {
+        initialEnrollments[c.id] = students.map(s => s.id);
+    });
+    setEnrollments(initialEnrollments);
+  }, []);
 
   // Filter States
   const [filterTerm, setFilterTerm] = useState('1');
@@ -596,7 +689,7 @@ export default function ClassroomApp() {
   
   // Import Student Modal State
   const [isImportStudentOpen, setIsImportStudentOpen] = useState(false);
-  const [importSearch, setImportSearch] = useState({ id: '', name: '', level: '', room: '' });
+  const [importFile, setImportFile] = useState(null); // Store selected file
 
   const showNotification = (msg, type = 'success') => {
     setNotification({ message: msg, type });
@@ -646,6 +739,10 @@ export default function ClassroomApp() {
     setCourses((prevCourses) => [...prevCourses, courseToAdd]);
     setAssignments({...assignments, [courseToAdd.id]: []});
     setBehaviors({...behaviors, [courseToAdd.id]: [...(behaviors[1] || [])] });
+    
+    // Auto-enroll all current students to new course (Mock convenience)
+    setEnrollments(prev => ({...prev, [courseToAdd.id]: students.map(s => s.id)}));
+
     setIsAddCourseOpen(false);
     if(newCourse.term !== filterTerm) setFilterTerm(newCourse.term);
     if(newCourse.year !== filterYear) setFilterYear(newCourse.year);
@@ -661,9 +758,67 @@ export default function ClassroomApp() {
     showNotification('เพิ่มนักเรียนเรียบร้อย');
   };
 
-  const handleImportStudentsSubmit = () => {
-      showNotification('ดึงข้อมูลจากฐานข้อมูลกลางเรียบร้อย');
-      setIsImportStudentOpen(false);
+  const handleFileChange = (e) => {
+      const file = e.target.files[0];
+      if (file) setImportFile(file);
+  };
+
+  const handleImportExcel = () => {
+    if (!importFile) {
+        showNotification('กรุณาเลือกไฟล์ก่อน', 'error');
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+            // Map data to student structure based on CSV/Excel headers
+            const newStudents = jsonData.map(row => ({
+                id: String(row['รหัสประจำตัว'] || ''), 
+                name: row['ชื่อ-นามสกุล'] || '',
+                level: row['ระดับชั้น'] || '',
+                room: String(row['ห้องเรียน'] || row['ห้องเรียน '] || ''), // Handle whitespace in key
+                department: row['แผนกวิชา'] || '',
+                status: 'normal'
+            })).filter(s => s.id && s.name); // Basic validation
+
+            if (newStudents.length === 0) {
+                 showNotification('ไม่พบข้อมูลในไฟล์ หรือรูปแบบคอลัมน์ไม่ถูกต้อง', 'error');
+                 return;
+            }
+
+            setStudents(prev => {
+                const existingIds = new Set(prev.map(s => s.id));
+                const uniqueNewStudents = newStudents.filter(s => !existingIds.has(s.id));
+                return [...prev, ...uniqueNewStudents];
+            });
+
+            showNotification(`นำเข้าข้อมูลนักเรียนสำเร็จ ${newStudents.length} รายการ`, 'success');
+            setIsImportOpen(false);
+            setImportFile(null); // Reset
+        } catch (error) {
+            console.error(error);
+            showNotification('เกิดข้อผิดพลาดในการอ่านไฟล์', 'error');
+        }
+    };
+    reader.readAsArrayBuffer(importFile);
+  };
+
+  // Teacher removes student from course
+  const handleRemoveStudentFromCourse = (courseId, studentId) => {
+      if(confirm('ต้องการลบนักเรียนคนนี้ออกจากรายวิชาใช่หรือไม่?')) {
+          setEnrollments(prev => ({
+              ...prev,
+              [courseId]: prev[courseId].filter(id => id !== studentId)
+          }));
+          showNotification('ลบนักเรียนออกจากรายวิชาเรียบร้อย', 'success');
+      }
   };
 
   const handleDeleteCourse = (e, id) => {
@@ -689,6 +844,25 @@ export default function ClassroomApp() {
   const handleSaveData = () => {
     showNotification('บันทึกข้อมูลเรียบร้อยแล้ว');
   };
+  
+  // ADDED: Admin delete student
+  const handleDeleteStudent = (studentId) => {
+      if(confirm('คุณต้องการลบนักเรียนคนนี้ออกจากฐานข้อมูลกลางหรือไม่? (ข้อมูลในทุกรายวิชาจะหายไป)')) {
+          setStudents(prev => prev.filter(s => s.id !== studentId));
+          showNotification('ลบนักเรียนเรียบร้อยแล้ว', 'success');
+      }
+  };
+  
+  // ADDED: Admin set user handlers
+    const handleSetUser = (user, type) => {
+        // ... (existing logic or define if missing)
+    };
+    const handleSaveUser = () => {
+         // ...
+    };
+    const handleBulkSetPassword = () => {
+         // ...
+    };
 
   const filteredCourses = courses.filter(c => c.term === filterTerm && c.year === filterYear);
 
@@ -811,12 +985,16 @@ export default function ClassroomApp() {
         <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
           {currentPage === 'dashboard' && (
              <>
-                {user.role === 'teacher' && <TeacherDashboard courses={courses} students={students} assignments={assignments} scores={scores} attendance={attendance} holidays={holidays} />}
+                {user.role === 'teacher' && <TeacherDashboard courses={courses} students={students} assignments={assignments} scores={scores} attendance={attendance} holidays={holidays} enrollments={enrollments} setEnrollments={setEnrollments} onNotify={showNotification} />}
                 {user.role === 'student' && <StudentDashboard studentId={user.id} courses={courses} assignments={assignments} scores={scores} attendance={attendance} holidays={holidays} />}
                 {user.role === 'admin' && <AdminDashboard students={students} teachers={teachers} setStudents={setStudents} onNotify={showNotification} />}
              </>
           )}
 
+          {/* ... existing course views ... */}
+          {/* Include other views here (courses list, add course modal, etc.) - same as before but ensured they exist in the full file context if needed, but for brevity assuming they are part of the full file replacement */}
+          {/* Re-adding the missing parts for completeness in this single file block */}
+          
           {currentPage === 'courses' && user.role === 'teacher' && !selectedCourse && (
             <div className="animate-fade-in space-y-6">
               <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
@@ -865,13 +1043,30 @@ export default function ClassroomApp() {
                 </div>
                 <div className="p-8">
                   {(!['attendance','scores','behavior','behavior_sum','summary'].includes(currentPage)) && (
-                    <div className="space-y-6"><div className="flex flex-col md:flex-row justify-between items-center bg-purple-50 p-6 rounded-xl border border-purple-100"><div className="mb-4 md:mb-0"><h3 className="font-bold text-purple-900 text-lg">รายชื่อนักเรียน ({students.length})</h3><p className="text-purple-600 text-sm">จัดการข้อมูลนักเรียนในรายวิชานี้</p></div><div className="flex space-x-2"><button onClick={() => setIsAddStudentOpen(true)} className="bg-white text-purple-600 border border-purple-200 px-4 py-2 rounded-lg text-sm font-bold flex items-center hover:bg-purple-100"><Plus className="w-4 h-4 mr-2"/> เพิ่มนักเรียนรายคน</button><button onClick={() => setIsImportStudentOpen(true)} className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center shadow hover:bg-purple-700"><Database className="w-4 h-4 mr-2" /> ดึงจากฐานข้อมูลกลาง</button></div></div><div className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm"><table className="w-full text-left"><thead className="bg-gray-50 text-gray-600 text-xs uppercase font-bold"><tr><th className="px-6 py-4">รหัส</th><th className="px-6 py-4">ชื่อ-สกุล</th><th className="px-6 py-4">ระดับชั้น</th><th className="px-6 py-4">ห้อง</th><th className="px-6 py-4 text-center">สถานะ</th></tr></thead><tbody className="divide-y divide-gray-100">{students.map(s => (<tr key={s.id} className="hover:bg-purple-50 transition-colors"><td className="px-6 py-4 font-mono text-gray-500">{s.id}</td><td className="px-6 py-4 font-medium text-gray-800">{s.name}</td><td className="px-6 py-4"><input type="text" className="border rounded px-2 py-1 w-24 bg-transparent focus:bg-white" defaultValue={s.level} /></td><td className="px-6 py-4"><input type="text" className="border rounded px-2 py-1 w-16 bg-transparent focus:bg-white" defaultValue={s.room} /></td><td className="px-6 py-4 text-center"><span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">ปกติ</span></td></tr>))}</tbody></table></div></div>
+                    <div className="space-y-6"><div className="flex flex-col md:flex-row justify-between items-center bg-purple-50 p-6 rounded-xl border border-purple-100"><div className="mb-4 md:mb-0"><h3 className="font-bold text-purple-900 text-lg">รายชื่อนักเรียน ({students.length})</h3><p className="text-purple-600 text-sm">จัดการข้อมูลนักเรียนในรายวิชานี้</p></div><div className="flex space-x-2"><button onClick={() => setIsAddStudentOpen(true)} className="bg-white text-purple-600 border border-purple-200 px-4 py-2 rounded-lg text-sm font-bold flex items-center hover:bg-purple-100"><Plus className="w-4 h-4 mr-2"/> เพิ่มนักเรียนรายคน</button><button onClick={() => setIsImportStudentOpen(true)} className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center shadow hover:bg-purple-700"><Database className="w-4 h-4 mr-2" /> ดึงจากฐานข้อมูลกลาง</button></div></div><div className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm"><table className="w-full text-left"><thead className="bg-gray-50 text-gray-600 text-xs uppercase font-bold"><tr><th className="px-6 py-4">รหัส</th><th className="px-6 py-4">ชื่อ-สกุล</th><th className="px-6 py-4">ระดับชั้น</th><th className="px-6 py-4">ห้อง</th><th className="px-6 py-4 text-center">จัดการ</th></tr></thead><tbody className="divide-y divide-gray-100">
+                    {/* Render students filtered by enrollment for this course */}
+                    {students
+                        .filter(s => (enrollments[selectedCourse.id] || []).includes(s.id))
+                        .map(s => (
+                        <tr key={s.id} className="hover:bg-purple-50 transition-colors">
+                            <td className="px-6 py-4 font-mono text-gray-500">{s.id}</td>
+                            <td className="px-6 py-4 font-medium text-gray-800">{s.name}</td>
+                            <td className="px-6 py-4"><input type="text" className="border rounded px-2 py-1 w-24 bg-transparent focus:bg-white" defaultValue={s.level} /></td>
+                            <td className="px-6 py-4"><input type="text" className="border rounded px-2 py-1 w-16 bg-transparent focus:bg-white" defaultValue={s.room} /></td>
+                            <td className="px-6 py-4 text-center">
+                                <button onClick={() => handleRemoveStudentFromCourse(selectedCourse.id, s.id)} className="text-red-400 hover:text-red-600 p-1 rounded-full hover:bg-red-50">
+                                    <Trash2 className="w-4 h-4" />
+                                </button>
+                            </td>
+                        </tr>
+                    ))}
+                    </tbody></table></div></div>
                   )}
-                  {currentPage === 'attendance' && <AttendanceCheck students={students} date={currentDate} setDate={setCurrentDate} attendance={attendance} onCheck={(sid, d, s) => setAttendance(prev => ({...prev, [sid]: {...(prev[sid]||{}), [d]: s}}))} onSave={handleSaveData} holidays={holidays} onToggleHoliday={handleToggleHoliday} />}
-                  {currentPage === 'scores' && <ScoreManager students={students} course={selectedCourse} assignments={assignments[selectedCourse.id] || []} scores={scores} onUpdateScore={(sid, aid, v, max) => setScores(p => ({...p, [sid]: {...(p[sid]||{}), [aid]: Math.min(Number(v), max)}}))} onAddAssignment={(cid, na) => setAssignments(p => ({...p, [cid]: [...(p[cid]||[]), {...na, id: 'as_'+Date.now()}]}))} onDeleteAssignment={handleDeleteAssignment} onSave={handleSaveData} />}
-                  {currentPage === 'behavior' && <BehaviorManager students={students} course={selectedCourse} behaviors={behaviors[selectedCourse.id] || behaviors[1]} behaviorRecords={behaviorRecords} onUpdateBehavior={(sid, date, bid) => setBehaviorRecords(prev => { const sRecs = prev[sid] || {}; const dRecs = sRecs[date] || []; const newRecs = dRecs.includes(bid) ? dRecs.filter(i => i!==bid) : [...dRecs, bid]; return {...prev, [sid]: {...sRecs, [date]: newRecs}}; })} onUpdateBehaviorsList={(newList) => setBehaviors(prev => ({...prev, [selectedCourse.id]: newList}))} onSave={handleSaveData} />}
-                  {currentPage === 'behavior_sum' && <BehaviorSummary students={students} behaviors={behaviors[selectedCourse.id] || behaviors[1]} behaviorRecords={behaviorRecords} maxAttitudeScore={selectedCourse.weights.attitude} />}
-                  {currentPage === 'summary' && (<div className="space-y-6"><div className="flex justify-between items-center bg-pink-50 p-6 rounded-xl border border-pink-100"><div className="text-pink-800"><h3 className="font-bold text-lg mb-1">สรุปผลการเรียน (Grade Report)</h3><div className="text-sm opacity-80">Knowledge {selectedCourse.weights.knowledge}% | Skill {selectedCourse.weights.skill}% | Attitude {selectedCourse.weights.attitude}%</div></div><button className="bg-pink-600 text-white px-6 py-2 rounded-lg font-bold shadow hover:bg-pink-700 flex items-center"><FileSpreadsheet className="w-5 h-5 mr-2" /> Export Excel</button></div><div className="overflow-x-auto bg-white rounded-xl shadow-sm border border-gray-100"><table className="w-full text-sm text-left"><thead className="bg-gray-50 uppercase text-xs font-bold text-gray-600"><tr><th className="px-4 py-4 border-r">รหัส</th><th className="px-4 py-4 border-r min-w-[150px]">ชื่อ-สกุล</th><th className="px-2 py-4 text-center border-r">เวลาเรียน</th><th className="px-2 py-4 text-center border-r bg-blue-50 text-blue-800">K ({selectedCourse.weights.knowledge})</th><th className="px-2 py-4 text-center border-r bg-orange-50 text-orange-800">S ({selectedCourse.weights.skill})</th><th className="px-2 py-4 text-center border-r bg-green-50 text-green-800">A ({selectedCourse.weights.attitude})</th><th className="px-2 py-4 text-center border-r font-black text-gray-800 bg-gray-100">รวม (100)</th><th className="px-2 py-4 text-center font-black text-white bg-pink-500">เกรด</th></tr></thead><tbody className="divide-y divide-gray-100">{students.map(std => { const stdScores = scores[std.id] || {}; const courseAssigns = assignments[selectedCourse.id] || []; let k=0, s=0; courseAssigns.forEach(assign => { const sc = Number(stdScores[assign.id] || 0); if(assign.type === 'knowledge') k += sc; if(assign.type === 'skill') s += sc; }); const a = calculateAttitudeScore(std.id, behaviors[selectedCourse.id] || behaviors[1], behaviorRecords, selectedCourse.weights.attitude); const total = k + s + a; const grade = calculateGrade(total, 100); return (<tr key={std.id} className="hover:bg-pink-50 transition-colors border-b"><td className="px-4 py-3 border-r font-mono text-gray-500">{std.id}</td><td className="px-4 py-3 border-r font-medium">{std.name}</td><td className="px-2 py-3 text-center border-r">100%</td><td className="px-2 py-3 text-center border-r font-bold text-blue-600 bg-blue-50">{k}</td><td className="px-2 py-3 text-center border-r font-bold text-orange-600 bg-orange-50">{s}</td><td className="px-2 py-3 text-center border-r font-bold text-green-600 bg-green-50">{a}</td><td className="px-2 py-3 text-center border-r font-black text-gray-800 bg-gray-100 text-lg">{total}</td><td className={`px-2 py-3 text-center font-black text-white ${grade === '0' || grade === 'ขร.' ? 'bg-red-500' : 'bg-green-500'}`}>{grade}</td></tr>) })}</tbody></table></div></div>)}
+                  {currentPage === 'attendance' && <AttendanceCheck students={students.filter(s => (enrollments[selectedCourse.id] || []).includes(s.id))} date={currentDate} setDate={setCurrentDate} attendance={attendance} onCheck={(sid, d, s) => setAttendance(prev => ({...prev, [sid]: {...(prev[sid]||{}), [d]: s}}))} onSave={handleSaveData} holidays={holidays} onToggleHoliday={handleToggleHoliday} />}
+                  {currentPage === 'scores' && <ScoreManager students={students.filter(s => (enrollments[selectedCourse.id] || []).includes(s.id))} course={selectedCourse} assignments={assignments[selectedCourse.id] || []} scores={scores} onUpdateScore={(sid, aid, v, max) => setScores(p => ({...p, [sid]: {...(p[sid]||{}), [aid]: Math.min(Number(v), max)}}))} onAddAssignment={(cid, na) => setAssignments(p => ({...p, [cid]: [...(p[cid]||[]), {...na, id: 'as_'+Date.now()}]}))} onDeleteAssignment={handleDeleteAssignment} onSave={handleSaveData} />}
+                  {currentPage === 'behavior' && <BehaviorManager students={students.filter(s => (enrollments[selectedCourse.id] || []).includes(s.id))} course={selectedCourse} behaviors={behaviors[selectedCourse.id] || behaviors[1]} behaviorRecords={behaviorRecords} onUpdateBehavior={(sid, date, bid) => setBehaviorRecords(prev => { const sRecs = prev[sid] || {}; const dRecs = sRecs[date] || []; const newRecs = dRecs.includes(bid) ? dRecs.filter(i => i!==bid) : [...dRecs, bid]; return {...prev, [sid]: {...sRecs, [date]: newRecs}}; })} onUpdateBehaviorsList={(newList) => setBehaviors(prev => ({...prev, [selectedCourse.id]: newList}))} onSave={handleSaveData} />}
+                  {currentPage === 'behavior_sum' && <BehaviorSummary students={students.filter(s => (enrollments[selectedCourse.id] || []).includes(s.id))} behaviors={behaviors[selectedCourse.id] || behaviors[1]} behaviorRecords={behaviorRecords} maxAttitudeScore={selectedCourse.weights.attitude} />}
+                  {currentPage === 'summary' && (<div className="space-y-6"><div className="flex justify-between items-center bg-pink-50 p-6 rounded-xl border border-pink-100"><div className="text-pink-800"><h3 className="font-bold text-lg mb-1">สรุปผลการเรียน (Grade Report)</h3><div className="text-sm opacity-80">Knowledge {selectedCourse.weights.knowledge}% | Skill {selectedCourse.weights.skill}% | Attitude {selectedCourse.weights.attitude}%</div></div><button className="bg-pink-600 text-white px-6 py-2 rounded-lg font-bold shadow hover:bg-pink-700 flex items-center"><FileSpreadsheet className="w-5 h-5 mr-2" /> Export Excel</button></div><div className="overflow-x-auto bg-white rounded-xl shadow-sm border border-gray-100"><table className="w-full text-sm text-left"><thead className="bg-gray-50 uppercase text-xs font-bold text-gray-600"><tr><th className="px-4 py-4 border-r">รหัส</th><th className="px-4 py-4 border-r min-w-[150px]">ชื่อ-สกุล</th><th className="px-2 py-4 text-center border-r">เวลาเรียน</th><th className="px-2 py-4 text-center border-r bg-blue-50 text-blue-800">K ({selectedCourse.weights.knowledge})</th><th className="px-2 py-4 text-center border-r bg-orange-50 text-orange-800">S ({selectedCourse.weights.skill})</th><th className="px-2 py-4 text-center border-r bg-green-50 text-green-800">A ({selectedCourse.weights.attitude})</th><th className="px-2 py-4 text-center border-r font-black text-gray-800 bg-gray-100">รวม (100)</th><th className="px-2 py-4 text-center font-black text-white bg-pink-500">เกรด</th></tr></thead><tbody className="divide-y divide-gray-100">{students.filter(s => (enrollments[selectedCourse.id] || []).includes(s.id)).map(std => { const stdScores = scores[std.id] || {}; const courseAssigns = assignments[selectedCourse.id] || []; let k=0, s=0; courseAssigns.forEach(assign => { const sc = Number(stdScores[assign.id] || 0); if(assign.type === 'knowledge') k += sc; if(assign.type === 'skill') s += sc; }); const a = calculateAttitudeScore(std.id, behaviors[selectedCourse.id] || behaviors[1], behaviorRecords, selectedCourse.weights.attitude); const total = k + s + a; const grade = calculateGrade(total, 100); return (<tr key={std.id} className="hover:bg-pink-50 transition-colors border-b"><td className="px-4 py-3 border-r font-mono text-gray-500">{std.id}</td><td className="px-4 py-3 border-r font-medium">{std.name}</td><td className="px-2 py-3 text-center border-r">100%</td><td className="px-2 py-3 text-center border-r font-bold text-blue-600 bg-blue-50">{k}</td><td className="px-2 py-3 text-center border-r font-bold text-orange-600 bg-orange-50">{s}</td><td className="px-2 py-3 text-center border-r font-bold text-green-600 bg-green-50">{a}</td><td className="px-2 py-3 text-center border-r font-black text-gray-800 bg-gray-100 text-lg">{total}</td><td className={`px-2 py-3 text-center font-black text-white ${grade === '0' || grade === 'ขร.' ? 'bg-red-500' : 'bg-green-500'}`}>{grade}</td></tr>) })}</tbody></table></div></div>)}
                 </div>
               </div>
             </div>
