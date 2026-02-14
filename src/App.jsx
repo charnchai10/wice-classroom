@@ -8,7 +8,7 @@ import {
   Settings, LogOut, Plus, Search, CheckCircle, XCircle, 
   AlertCircle, Clock, Save, Trash2, Edit, FileSpreadsheet,
   Menu, ChevronRight, ChevronLeft, GraduationCap, UserPlus, Database,
-  Flag, ThumbsUp, ThumbsDown, MoreVertical, Lock, Mail, Award, User, Shield, Key, FileText, List, UploadCloud, Users2, AlertTriangle, CheckSquare, Square, Info, Book, PenTool, Layers
+  Flag, ThumbsUp, ThumbsDown, MoreVertical, Lock, Mail, Award, User, Shield, Key, FileText, List, UploadCloud, Users2, AlertTriangle, CheckSquare, Square, Info, Book, PenTool
 } from 'lucide-react';
 
 /**
@@ -170,7 +170,7 @@ const AttendanceCheck = ({ students, date, setDate, attendance, onCheck, onSave,
       { val: 'present', label: 'มาเรียน', color: 'bg-green-100 text-green-700 border-green-200', active: 'bg-green-600 text-white border-green-600' }, 
       { val: 'absent', label: 'ขาดเรียน', color: 'bg-red-100 text-red-700 border-red-200', active: 'bg-red-600 text-white border-red-600' }, 
       { val: 'leave', label: 'ลากิจ', color: 'bg-blue-100 text-blue-700 border-blue-200', active: 'bg-blue-600 text-white border-blue-600' }, 
-      { val: 'sick', label: 'ลาป่วย', color: 'bg-yellow-100 text-yellow-700 border-yellow-200', active: 'bg-yellow-500 text-white border-yellow-500' }
+      { val: 'sick', label: 'ลาป่วย', color: 'bg-yellow-50 text-yellow-700 border-yellow-200', active: 'bg-yellow-500 text-white border-yellow-500' }
   ];
 
   return (
@@ -381,7 +381,6 @@ const ScoreManager = ({ students, course, assignments, scores, onUpdateScore, on
                                             );
                                         })}
                                         {(() => {
-                                            // Calculate Row Total (Raw Sum)
                                             const relevantAssigns = assignments.filter(a => ['knowledge', 'skill'].includes(a.type));
                                             totalScore = relevantAssigns.reduce((sum, a) => sum + Number(scores[std.id]?.[a.id] || 0), 0);
                                         })()}
@@ -860,14 +859,19 @@ export default function ClassroomApp() {
     e.preventDefault();
     setLoginError('');
     if (loginForm.role === 'teacher') {
-       if (loginForm.username && loginForm.password) { setUser({ name: 'นายชาญชัย แก้วเถิน', role: 'teacher' }); setCurrentPage('dashboard'); } 
-       else { setLoginError('กรุณากรอกชื่อผู้ใช้งานและรหัสผ่าน'); }
+       // Mock check - in real app, check against teachers array
+       const teacher = teachers.find(t => t.username === loginForm.username && t.password === loginForm.password);
+       if (teacher) { setUser({ ...teacher, role: 'teacher' }); setCurrentPage('dashboard'); } 
+       else if (loginForm.username === 'teacher' && loginForm.password === '123') { setUser({ name: 'นายชาญชัย แก้วเถิน', role: 'teacher' }); setCurrentPage('dashboard'); } // Fallback
+       else { setLoginError('ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง'); }
     } else if (loginForm.role === 'admin') {
        if (loginForm.password === '072889604') { setUser({ name: 'ผู้ดูแลระบบ', role: 'admin' }); setCurrentPage('dashboard'); } 
        else { setLoginError('รหัสผ่านไม่ถูกต้อง'); }
     } else if (loginForm.role === 'student') {
-       if (loginForm.username && loginForm.password) { setUser({ name: 'นายสมชาย รักเรียน', role: 'student', id: '6620901001' }); setCurrentPage('dashboard'); } 
-       else { setLoginError('กรุณากรอกชื่อผู้ใช้งานและรหัสผ่าน'); }
+       const student = students.find(s => s.username === loginForm.username && s.password === loginForm.password);
+       if (student) { setUser({ ...student, role: 'student' }); setCurrentPage('dashboard'); }
+       else if (loginForm.username === 'student' && loginForm.password === '123') { setUser({ name: 'นายสมชาย รักเรียน', role: 'student', id: '6620901001' }); setCurrentPage('dashboard'); } // Fallback
+       else { setLoginError('ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง'); }
     }
   };
 
@@ -1144,9 +1148,9 @@ export default function ClassroomApp() {
                        {filteredCourses.map(c => (
                            <div key={c.id} className="bg-white rounded-xl shadow-sm hover:shadow-lg transition-all border overflow-hidden group relative">
                                <div className="h-2 bg-blue-600"></div>
-                               <button onClick={(e)=>handleDeleteCourse(e, c.id)} className="absolute top-4 right-4 text-gray-300 hover:text-red-500 p-1 bg-white rounded-full shadow-sm z-10"><Trash2 className="w-4 h-4"/></button>
+                               <button onClick={(e)=>handleDeleteCourse(e, c.id)} className="absolute top-4 right-4 text-gray-300 hover:text-red-500"><Trash2 className="w-4 h-4"/></button>
                                <div className="p-6">
-                                   <div className="flex justify-between items-center mb-3"><span className="text-xs font-bold text-blue-700 bg-blue-50 px-3 py-1 rounded-full border border-blue-100">{c.code}</span></div>
+                                   <div className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded inline-block mb-2">{c.code}</div>
                                    <h3 className="font-bold text-gray-800 text-lg mb-4 line-clamp-2 h-14">{c.name}</h3>
                                    <p className="text-sm text-gray-500 mb-4 flex items-center"><Users className="w-4 h-4 mr-2 text-blue-400"/> {c.room} | {c.credits} หน่วยกิต</p>
                                    <button onClick={()=>{setSelectedCourse(c); setCourseTab('students');}} className="w-full border border-blue-200 text-blue-600 py-2 rounded hover:bg-blue-50">จัดการรายวิชา</button>
@@ -1160,30 +1164,30 @@ export default function ClassroomApp() {
             {/* VIEW: SELECTED COURSE (Tabs & Content) */}
             {selectedCourse && (
                 <div className="animate-fade-in pb-12">
-                    <button onClick={()=>setSelectedCourse(null)} className="mb-4 text-sm text-gray-500 hover:text-blue-600 flex items-center font-bold"><ChevronLeft className="w-4 h-4 mr-1"/> กลับหน้ารายวิชา</button>
+                    <button onClick={()=>setSelectedCourse(null)} className="mb-4 text-sm text-gray-500 hover:text-blue-600 flex items-center"><ChevronLeft className="w-4 h-4 mr-1"/> กลับหน้ารายวิชา</button>
                     <div className="bg-white rounded-xl shadow-lg border overflow-hidden min-h-[600px] flex flex-col">
                         {/* Course Tabs Navigation */}
                         <div className="flex border-b overflow-x-auto bg-gray-50/50">
                            {[
-                               { id: 'students', label: 'รายชื่อนักเรียน', icon: Users, color: 'text-purple-600' },
-                               { id: 'attendance', label: 'เวลาเรียน', icon: Clock, color: 'text-blue-600' },
-                               { id: 'scores', label: 'คะแนนเก็บ', icon: Edit, color: 'text-orange-600' },
-                               { id: 'behavior', label: 'บันทึกพฤติกรรม', icon: Flag, color: 'text-emerald-600' },
-                               { id: 'behavior_sum', label: 'สรุปพฤติกรรม', icon: Award, color: 'text-indigo-600' },
-                               { id: 'summary', label: 'สรุปผล', icon: GraduationCap, color: 'text-pink-600' }
+                               { id: 'students', label: 'รายชื่อ', icon: Users },
+                               { id: 'attendance', label: 'เวลาเรียน', icon: Clock },
+                               { id: 'scores', label: 'คะแนนเก็บ', icon: Edit },
+                               { id: 'behavior', label: 'พฤติกรรม', icon: Flag },
+                               { id: 'behavior_sum', label: 'สรุปพฤติกรรม', icon: Award },
+                               { id: 'summary', label: 'สรุปผล', icon: GraduationCap }
                            ].map(tab => (
                                <button 
                                  key={tab.id}
                                  onClick={() => setCourseTab(tab.id)}
-                                 className={`px-6 py-5 flex items-center whitespace-nowrap text-sm font-bold border-b-4 transition-all ${courseTab === tab.id ? `border-${tab.color.split('-')[1]}-500 ${tab.color} bg-white` : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100'}`}
+                                 className={`px-6 py-4 flex items-center whitespace-nowrap text-sm font-bold border-b-4 transition-colors ${courseTab === tab.id ? 'border-blue-600 text-blue-800 bg-white' : 'border-transparent text-gray-500 hover:bg-gray-100'}`}
                                >
-                                   <tab.icon className={`w-4 h-4 mr-2 ${courseTab === tab.id ? tab.color : 'text-gray-400'}`}/> {tab.label}
+                                   <tab.icon className="w-4 h-4 mr-2"/> {tab.label}
                                </button>
                            ))}
                         </div>
                         
                         {/* Course Content Area - Persistent Wrapper */}
-                        <div className="p-8 flex-1 bg-white">
+                        <div className="p-6 flex-1 bg-white">
                             {/* 1. Student List Tab */}
                             <div style={{ display: courseTab === 'students' ? 'block' : 'none' }}>
                                 <div>
@@ -1216,7 +1220,7 @@ export default function ClassroomApp() {
 
                             {/* 3. Scores Tab */}
                             <div style={{ display: courseTab === 'scores' ? 'block' : 'none' }}>
-                                <ScoreManager students={students.filter(s => (enrollments[selectedCourse.id]||[]).includes(s.id))} course={selectedCourse} assignments={assignments[selectedCourse.id]||[]} scores={scores} onUpdateScore={(sid, aid, v, max) => setScores(p => ({...p, [sid]: {...(p[sid]||{}), [aid]: Math.min(Number(v), max)}}))} onAddAssignment={(cid, na) => setAssignments(p => ({...p, [cid]: [...(p[cid]||[]), {...na, id: 'as_'+Date.now()}]}))} onDeleteAssignment={handleDeleteAssignment} onSave={handleSaveData} />
+                                <ScoreManager students={students.filter(s => (enrollments[selectedCourse.id]||[]).includes(s.id))} course={selectedCourse} assignments={assignments[selectedCourse.id]||[]} scores={scores} onUpdateScore={(sid, aid, v, max) => setScores(p => ({...p, [sid]: {...(p[sid]||{}), [aid]: Math.min(Number(val), max)}}))} onAddAssignment={(cid, na) => setAssignments(p => ({...p, [cid]: [...(p[cid]||[]), {...na, id: 'as_'+Date.now()}]}))} onDeleteAssignment={handleDeleteAssignment} onSave={handleSaveData} />
                             </div>
 
                             {/* 4. Behavior Tab */}
@@ -1401,7 +1405,8 @@ export default function ClassroomApp() {
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                      <div className="bg-white p-6 rounded-lg w-[600px] h-[500px] flex flex-col">
                         <h3 className="font-bold text-lg mb-4">ดึงรายชื่อจากฐานข้อมูลกลาง</h3>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+                        <div className="text-xs text-gray-500 mb-2 bg-yellow-50 p-2 rounded border border-yellow-100 flex items-center"><Info className="w-4 h-4 mr-1 text-yellow-600"/> ค้นหาและเลือกนักเรียนที่ต้องการนำเข้าสู่รายวิชานี้</div>
+                        <div className="grid grid-cols-4 gap-2 mb-4">
                            <input placeholder="รหัส" value={importSearch.id} onChange={e=>setImportSearch({...importSearch, id:e.target.value})} className="border p-1 text-sm rounded"/>
                            <input placeholder="ชื่อ" value={importSearch.name} onChange={e=>setImportSearch({...importSearch, name:e.target.value})} className="border p-1 text-sm rounded"/>
                            <input placeholder="ชั้น" value={importSearch.level} onChange={e=>setImportSearch({...importSearch, level:e.target.value})} className="border p-1 text-sm rounded"/>
@@ -1449,6 +1454,10 @@ export default function ClassroomApp() {
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                     <div className="bg-white p-6 rounded-lg w-96">
                         <h3 className="font-bold text-lg mb-4">นำเข้า Excel (Admin)</h3>
+                        <div className="mb-4 text-xs text-gray-600 bg-gray-50 p-3 rounded border">
+                           <b>รูปแบบไฟล์ที่รองรับ:</b> .xlsx, .xls<br/>
+                           <b>คอลัมน์ที่ต้องมี:</b> รหัสประจำตัว, ชื่อ-นามสกุล, ระดับชั้น, ห้องเรียน, แผนกวิชา
+                        </div>
                         <input type="file" onChange={handleFileChange} className="mb-4 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
                         <div className="flex justify-end gap-2">
                             <button onClick={()=>setIsImportExcelOpen(false)} className="px-4 py-2 text-gray-500">ยกเลิก</button>
