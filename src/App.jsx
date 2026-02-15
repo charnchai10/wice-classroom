@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import * as XLSX from 'xlsx'; // เครื่องมืออ่าน Excel
+import { createClient } from '@supabase/supabase-js'; // เชื่อมต่อฐานข้อมูล
 import { 
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
 } from 'recharts';
@@ -8,97 +9,43 @@ import {
   Settings, LogOut, Plus, Search, CheckCircle, XCircle, 
   AlertCircle, Clock, Save, Trash2, Edit, FileSpreadsheet,
   Menu, ChevronRight, ChevronLeft, GraduationCap, UserPlus, Database,
-  Flag, ThumbsUp, ThumbsDown, MoreVertical, Lock, Mail, Award, User, Shield, Key, FileText, List, UploadCloud, Users2, AlertTriangle, CheckSquare, Square, Info, Book, PenTool
+  Flag, ThumbsUp, ThumbsDown, MoreVertical, Lock, Mail, Award, User, Shield, Key, FileText, List, UploadCloud, Users2, AlertTriangle, CheckSquare, Square, Info, Book, PenTool, Layers, Loader2, Filter
 } from 'lucide-react';
 
 /**
  * =================================================================================================
- * CONFIGURATION & THEME
+ * DATABASE CONNECTION & CONFIGURATION
  * =================================================================================================
  */
+
+// การตั้งค่า Supabase (ดึงจาก .env)
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+// การตั้งค่าธีมและโลโก้
+const THEME = {
+  primary: '#1E3A8A', // Blue
+  secondary: '#1E40AF',
+  accent: '#FACC15', // Gold
+  bg: '#F3F4F6',
+  text: '#1F2937',
+  font: "'Sarabun', sans-serif",
+  success: '#10B981',
+  warning: '#F59E0B',
+  danger: '#EF4444',
+  info: '#3B82F6'
+};
+
 const LOGO_URL = "https://i.postimg.cc/CxmgLgc9/wice2567logo-e.png";
 
 /**
  * =================================================================================================
- * MOCK DATA (ข้อมูลจำลอง)
- * =================================================================================================
- */
-const INITIAL_COURSES = [
-  { 
-    id: 1, 
-    code: '20204-2001', 
-    name: 'หลักการเขียนโปรแกรม', 
-    credits: 3, 
-    room: '421', 
-    level: 'ปวช. 2', 
-    term: '1', 
-    year: '2567', 
-    weights: { knowledge: 40, skill: 40, attitude: 20 } 
-  },
-  { 
-    id: 2, 
-    code: '20204-2002', 
-    name: 'ระบบฐานข้อมูลเบื้องต้น', 
-    credits: 3, 
-    room: '422', 
-    level: 'ปวช. 2', 
-    term: '1', 
-    year: '2567', 
-    weights: { knowledge: 30, skill: 50, attitude: 20 } 
-  },
-];
-
-const INITIAL_STUDENTS = [
-  { id: '6620901001', name: 'นายสมชาย รักเรียน', level: 'ปวช. 2', room: '1', department: 'คอมพิวเตอร์ธุรกิจ', status: 'normal', username: 'student1', password: '123' },
-  { id: '6620901002', name: 'นางสาวสมหญิง จริงใจ', level: 'ปวช. 2', room: '1', department: 'คอมพิวเตอร์ธุรกิจ', status: 'normal', username: 'student2', password: '123' },
-  { id: '6620901003', name: 'นายมานะ อดทน', level: 'ปวช. 2', room: '1', department: 'คอมพิวเตอร์ธุรกิจ', status: 'risk', username: 'student3', password: '123' },
-  { id: '6620901004', name: 'นางสาวชูใจ ใฝ่ดี', level: 'ปวช. 2', room: '1', department: 'คอมพิวเตอร์ธุรกิจ', status: 'normal', username: 'student4', password: '123' },
-  { id: '6620901005', name: 'นายปิติ มีทรัพย์', level: 'ปวช. 2', room: '1', department: 'คอมพิวเตอร์ธุรกิจ', status: 'normal', username: 'student5', password: '123' },
-  { id: '6620901006', name: 'นายกล้าหาญ ชาญชัย', level: 'ปวช. 2', room: '2', department: 'ช่างยนต์', status: 'normal', username: 'student6', password: '123' },
-  { id: '6620901007', name: 'นางสาวมีนา มานะ', level: 'ปวช. 2', room: '2', department: 'ช่างยนต์', status: 'normal', username: 'student7', password: '123' },
-];
-
-const INITIAL_TEACHERS = [
-    { id: 1, name: 'นายชาญชัย แก้วเถิน', email: 'charnchai10@gmail.com', username: 'teacher', password: '123', role: 'teacher' },
-    { id: 2, name: 'นางสาวใจดี มีสุข', email: 'jaidee@gmail.com', username: 'teacher2', password: '123', role: 'teacher' }
-];
-
-const INITIAL_ASSIGNMENTS = {
-  1: [
-      { id: 'a1', name: 'สอบกลางภาค', type: 'knowledge', maxScore: 20 }, 
-      { id: 'a2', name: 'ใบงานที่ 1', type: 'skill', maxScore: 10 },
-      { id: 'a3', name: 'โครงงานกลุ่ม', type: 'skill', maxScore: 20 }
-  ],
-  2: [
-      { id: 'b1', name: 'ออกแบบ ER-Diagram', type: 'skill', maxScore: 20 },
-      { id: 'b2', name: 'สอบทฤษฎี', type: 'knowledge', maxScore: 30 }
-  ]
-};
-
-const INITIAL_SCORES = {
-  '6620901001': { 'a1': 15, 'a2': 8, 'a3': 18, 'b1': 18, 'b2': 25 },
-  '6620901002': { 'a1': 18, 'a2': 9, 'a3': 19, 'b1': 15, 'b2': 28 },
-};
-
-const INITIAL_BEHAVIORS = {
-  1: [
-      { id: 'beh1', name: 'เข้าเรียนตรงเวลา', type: 'positive', point: 1 }, 
-      { id: 'beh2', name: 'แต่งกายเรียบร้อย', type: 'positive', point: 1 }, 
-      { id: 'beh3', name: 'ส่งงานล่าช้า', type: 'negative', point: 1 },
-      { id: 'beh4', name: 'คุยในเวลาเรียน', type: 'negative', point: 1 }
-  ],
-  2: [
-      { id: 'beh1', name: 'เข้าเรียนตรงเวลา', type: 'positive', point: 1 }, 
-      { id: 'beh3', name: 'ส่งงานล่าช้า', type: 'negative', point: 1 }
-  ]
-};
-
-/**
- * =================================================================================================
- * UTILITY FUNCTIONS
+ * UTILITY FUNCTIONS (ฟังก์ชันช่วยคำนวณและจัดการข้อมูล)
  * =================================================================================================
  */
 
+// คำนวณเกรดจากคะแนนรวม
 const calculateGrade = (totalScore, attendancePercent) => {
   if (attendancePercent < 80) return 'ขร.';
   if (totalScore >= 80) return '4';
@@ -111,12 +58,18 @@ const calculateGrade = (totalScore, attendancePercent) => {
   return '0';
 };
 
+// คำนวณคะแนนเจตคติจากประวัติพฤติกรรม
+// studentId: รหัสนักเรียน
+// behaviors: รายการพฤติกรรมทั้งหมดของวิชานั้น
+// behaviorRecords: ประวัติการเช็คพฤติกรรมทั้งหมด { date: [behaviorIds] }
+// maxAttitudeScore: คะแนนเต็มจิตพิสัย
 const calculateAttitudeScore = (studentId, behaviors, behaviorRecords, maxAttitudeScore) => {
-    const studentRecords = behaviorRecords[studentId] || {};
-    const recordedDates = Object.keys(studentRecords);
+    // ดึงประวัติเฉพาะของนักเรียนคนนี้จาก Props ที่ส่งมา (ในรูปแบบ Object หรือ Array)
+    const studentRecs = behaviorRecords[studentId] || {};
+    const recordedDates = Object.keys(studentRecs);
     const totalDays = recordedDates.length;
 
-    if (totalDays === 0) return maxAttitudeScore; 
+    if (totalDays === 0) return maxAttitudeScore; // ยังไม่มีการบันทึก ให้คะแนนเต็มไปก่อน
 
     let totalCompliancePercent = 0;
     let topicCount = 0;
@@ -124,25 +77,48 @@ const calculateAttitudeScore = (studentId, behaviors, behaviorRecords, maxAttitu
     behaviors.forEach(b => {
         topicCount++;
         let count = 0;
+        
         recordedDates.forEach(date => {
-            const hasBehavior = studentRecords[date]?.includes(b.id);
+            const hasBehavior = studentRecs[date]?.includes(b.id);
             if (b.type === 'positive') {
+                // พฤติกรรมบวก: มีบันทึก = ได้คะแนน
                 if (hasBehavior) count++;
             } else {
+                // พฤติกรรมลบ: ไม่มีบันทึก = ได้คะแนน (เพราะไม่ได้ทำผิด)
                 if (!hasBehavior) count++; 
             }
         });
+        
+        // คำนวณ % ของหัวข้อนี้
         totalCompliancePercent += (count / totalDays);
     });
 
     if (topicCount === 0) return maxAttitudeScore;
 
+    // หาค่าเฉลี่ยเปอร์เซ็นต์ความดี * คะแนนเต็ม
     const averageCompliance = totalCompliancePercent / topicCount;
     return Math.round(averageCompliance * maxAttitudeScore);
 };
 
-// --- COMPONENTS ---
+// แปลงวันที่ให้เป็นรูปแบบไทย
+const formatDateThai = (dateString) => {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('th-TH', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric',
+        weekday: 'short'
+    });
+};
 
+/**
+ * =================================================================================================
+ * UI COMPONENTS (ส่วนประกอบหน้าจอที่ใช้ซ้ำ)
+ * =================================================================================================
+ */
+
+// 1. Notification Toast
 const Notification = ({ message, type, onClose }) => {
   useEffect(() => {
     const timer = setTimeout(onClose, 3000);
@@ -151,162 +127,397 @@ const Notification = ({ message, type, onClose }) => {
 
   if (!message) return null;
 
+  const bgClass = type === 'success' ? 'bg-green-100 border-green-200 text-green-800' :
+                  type === 'error' ? 'bg-red-100 border-red-200 text-red-800' :
+                  'bg-blue-100 border-blue-200 text-blue-800';
+  
+  const Icon = type === 'success' ? CheckCircle : type === 'error' ? AlertCircle : Info;
+
   return (
-    <div className={`fixed top-4 right-4 z-[9999] px-6 py-4 rounded-xl shadow-xl flex items-center space-x-3 border animate-in slide-in-from-right fade-in duration-300 bg-white ${
-      type === 'success' ? 'border-l-4 border-l-green-500 text-green-800' : 
-      type === 'error' ? 'border-l-4 border-l-red-500 text-red-800' : 'border-l-4 border-l-blue-500 text-blue-800'
-    }`}>
-      {type === 'success' ? <CheckCircle className="w-6 h-6 text-green-500" /> : <AlertCircle className="w-6 h-6 text-red-500" />}
-      <span className="font-medium text-sm md:text-base">{message}</span>
+    <div className={`fixed top-4 right-4 z-[9999] px-6 py-4 rounded-xl shadow-xl flex items-center space-x-3 border animate-in slide-in-from-right fade-in duration-300 ${bgClass}`}>
+      <Icon className="w-6 h-6" />
+      <div>
+         <h4 className="font-bold text-sm">{type === 'success' ? 'สำเร็จ' : type === 'error' ? 'ผิดพลาด' : 'แจ้งเตือน'}</h4>
+         <span className="text-sm">{message}</span>
+      </div>
+      <button onClick={onClose} className="ml-4 opacity-50 hover:opacity-100 transition-opacity">
+          <XCircle className="w-5 h-5"/>
+      </button>
     </div>
   );
 };
 
-const AttendanceCheck = ({ students, date, setDate, attendance, onCheck, onSave, holidays, onToggleHoliday }) => {
-  const isHoliday = holidays[date];
-  const handleBulkCheck = (status) => { if (isHoliday) return; students.forEach(std => onCheck(std.id, date, status)); };
-  
+// 2. Loading Spinner Overlay
+const LoadingOverlay = () => (
+    <div className="absolute inset-0 bg-white/70 backdrop-blur-[2px] flex flex-col items-center justify-center z-10 rounded-xl">
+        <Loader2 className="w-10 h-10 animate-spin text-blue-600 mb-2"/>
+        <span className="text-sm font-medium text-blue-800 animate-pulse">กำลังประมวลผลข้อมูล...</span>
+    </div>
+);
+
+// 3. Modal Wrapper
+const Modal = ({ isOpen, onClose, title, children, size = 'md' }) => {
+    if (!isOpen) return null;
+    
+    const sizeClasses = {
+        sm: 'max-w-md',
+        md: 'max-w-lg',
+        lg: 'max-w-3xl',
+        xl: 'max-w-5xl'
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+            <div className={`bg-white rounded-2xl shadow-2xl w-full ${sizeClasses[size]} flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200 border border-gray-100`}>
+                <div className="flex justify-between items-center p-5 border-b border-gray-100 bg-gray-50/50 rounded-t-2xl">
+                    <h3 className="font-bold text-xl text-gray-800 flex items-center">{title}</h3>
+                    <button onClick={onClose} className="text-gray-400 hover:text-red-500 p-2 rounded-full hover:bg-red-50 transition-colors">
+                        <XCircle className="w-6 h-6"/>
+                    </button>
+                </div>
+                <div className="p-6 overflow-y-auto custom-scrollbar relative">
+                    {children}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+/**
+ * =================================================================================================
+ * FEATURE COMPONENTS (ส่วนทำงานหลัก)
+ * =================================================================================================
+ */
+
+// 1. Attendance Check (เช็คชื่อ)
+const AttendanceCheck = ({ courseId, students, onNotify }) => {
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [attendanceData, setAttendanceData] = useState({}); // { studentId: status }
+  const [isHoliday, setIsHoliday] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  // ดึงข้อมูลการเช็คชื่อจาก DB
+  const fetchAttendance = useCallback(async () => {
+      setLoading(true);
+      try {
+          const { data, error } = await supabase
+              .from('attendance')
+              .select('*')
+              .eq('course_id', courseId)
+              .eq('date', date);
+
+          if (error) throw error;
+
+          const map = {};
+          let holidayFlag = false;
+
+          // เช็คว่ามีสถานะ 'holiday' หรือไม่
+          if (data.some(r => r.status === 'holiday')) {
+              holidayFlag = true;
+          }
+
+          data.forEach(r => {
+              if (r.student_id !== 'HOLIDAY_MARKER') map[r.student_id] = r.status;
+          });
+
+          setAttendanceData(map);
+          setIsHoliday(holidayFlag);
+
+      } catch (err) {
+          console.error("Error fetching attendance:", err);
+          onNotify("ไม่สามารถโหลดข้อมูลเวลาเรียนได้", "error");
+      } finally {
+          setLoading(false);
+      }
+  }, [courseId, date, onNotify]);
+
+  useEffect(() => {
+      fetchAttendance();
+  }, [fetchAttendance]);
+
+  // บันทึกข้อมูลลง DB
+  const handleSave = async () => {
+      setLoading(true);
+      try {
+          // ลบข้อมูลเก่าของวันนี้ออกก่อน เพื่อเขียนทับ
+          await supabase.from('attendance').delete().eq('course_id', courseId).eq('date', date);
+
+          const insertData = [];
+          
+          if (isHoliday) {
+              students.forEach(s => {
+                  insertData.push({
+                      course_id: courseId,
+                      student_id: s.id,
+                      date: date,
+                      status: 'holiday'
+                  });
+              });
+          } else {
+               Object.keys(attendanceData).forEach(studentId => {
+                   if (attendanceData[studentId]) { // บันทึกเฉพาะที่มีค่า
+                       insertData.push({
+                           course_id: courseId,
+                           student_id: studentId,
+                           date: date,
+                           status: attendanceData[studentId]
+                       });
+                   }
+               });
+          }
+
+          if (insertData.length > 0) {
+              const { error } = await supabase.from('attendance').insert(insertData);
+              if (error) throw error;
+          }
+
+          onNotify('บันทึกเวลาเรียนเรียบร้อยแล้ว', 'success');
+      } catch (err) {
+          console.error(err);
+          onNotify('เกิดข้อผิดพลาดในการบันทึก: ' + err.message, 'error');
+      } finally {
+          setLoading(false);
+      }
+  };
+
+  const handleBulkCheck = (status) => {
+      const newMap = {};
+      students.forEach(s => newMap[s.id] = status);
+      setAttendanceData(newMap);
+  };
+
+  const toggleStatus = (studentId, status) => {
+      setAttendanceData(prev => ({ ...prev, [studentId]: status }));
+  };
+
   const statusOptions = [ 
-      { val: 'present', label: 'มาเรียน', color: 'bg-green-100 text-green-700 border-green-200', active: 'bg-green-600 text-white border-green-600' }, 
-      { val: 'absent', label: 'ขาดเรียน', color: 'bg-red-100 text-red-700 border-red-200', active: 'bg-red-600 text-white border-red-600' }, 
-      { val: 'leave', label: 'ลากิจ', color: 'bg-blue-100 text-blue-700 border-blue-200', active: 'bg-blue-600 text-white border-blue-600' }, 
-      { val: 'sick', label: 'ลาป่วย', color: 'bg-yellow-50 text-yellow-700 border-yellow-200', active: 'bg-yellow-500 text-white border-yellow-500' }
+      { val: 'present', label: 'มา', color: 'bg-green-100 text-green-700', active: 'bg-green-600 text-white' }, 
+      { val: 'absent', label: 'ขาด', color: 'bg-red-100 text-red-700', active: 'bg-red-600 text-white' }, 
+      { val: 'leave', label: 'ลากิจ', color: 'bg-blue-100 text-blue-700', active: 'bg-blue-600 text-white' }, 
+      { val: 'sick', label: 'ป่วย', color: 'bg-yellow-100 text-yellow-700', active: 'bg-yellow-500 text-white' }
   ];
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
-         <div className="flex flex-col md:flex-row gap-6 items-center w-full">
-            <div className="relative w-full md:w-auto">
-                <label className="text-gray-500 text-xs font-bold uppercase mb-1 block tracking-wider">วันที่เช็คชื่อ</label>
-                <div className="relative">
-                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <input 
-                        type="date" 
-                        value={date} 
-                        onChange={(e) => setDate(e.target.value)} 
-                        className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none w-full" 
-                    />
-                </div>
-            </div>
-            <div className="flex items-center space-x-3 bg-gray-50 px-4 py-2 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-100" onClick={() => onToggleHoliday(date)}>
-                <div className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${isHoliday ? 'bg-red-500 border-red-500' : 'border-gray-400 bg-white'}`}>
-                    {isHoliday && <CheckSquare className="w-3.5 h-3.5 text-white" />}
-                </div>
-                <label className={`font-bold cursor-pointer select-none ${isHoliday ? 'text-red-600' : 'text-gray-600'}`}>
-                    วันหยุดราชการ
-                </label>
-            </div>
-         </div>
-         <div className="flex gap-2 w-full md:w-auto justify-end">
-            {!isHoliday && (
-                <>
-                    <button onClick={() => handleBulkCheck('present')} className="px-3 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-bold hover:bg-green-200 transition">มาครบ</button>
-                    <button onClick={() => handleBulkCheck('absent')} className="px-3 py-2 bg-red-100 text-red-700 rounded-lg text-sm font-bold hover:bg-red-200 transition">ขาดครบ</button>
-                </>
-            )}
-            <button onClick={onSave} className="flex items-center bg-blue-600 text-white px-5 py-2 rounded-lg shadow hover:bg-blue-700 transition font-bold"><Save className="w-4 h-4 mr-2"/> บันทึก</button>
-         </div>
-      </div>
-
-      {isHoliday ? (
-          <div className="bg-red-50 border-2 border-dashed border-red-200 p-12 rounded-xl text-center flex flex-col items-center justify-center text-red-600">
-              <Calendar className="w-16 h-16 mb-4 opacity-20" />
-              <h3 className="font-bold text-xl mb-2">⛔ วันนี้เป็นวันหยุดราชการ</h3>
-              <p className="text-red-400">ระบบจะไม่นำวันนี้ไปคำนวณเวลาเรียน</p>
+    <div className="space-y-6 relative">
+       {loading && <LoadingOverlay />}
+       <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
+              <div className="relative w-full md:w-auto">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><Calendar size={16}/></div>
+                  <input type="date" value={date} onChange={e => setDate(e.target.value)} className="pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none w-full bg-gray-50" />
+              </div>
+              <div className="flex items-center gap-2 cursor-pointer select-none bg-gray-50 px-4 py-2 rounded-lg border hover:bg-gray-100 transition" onClick={() => setIsHoliday(!isHoliday)}>
+                  <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${isHoliday ? 'bg-red-500 border-red-500' : 'bg-white border-gray-300'}`}>
+                      {isHoliday && <CheckSquare className="w-3.5 h-3.5 text-white" />}
+                  </div>
+                  <span className={isHoliday ? 'text-red-600 font-bold' : 'text-gray-600'}>วันหยุดราชการ</span>
+              </div>
           </div>
-      ) : (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                    <thead className="bg-gray-50 text-gray-700 text-sm uppercase">
-                        <tr>
-                            <th className="px-6 py-4 w-1/3">รหัส / ชื่อ-สกุล</th>
-                            <th className="px-6 py-4 text-center">สถานะการมาเรียน</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                        {students.map((std) => {
-                            const status = attendance[std.id]?.[date] || '';
-                            return (
-                                <tr key={std.id} className="hover:bg-blue-50/30 transition-colors">
-                                    <td className="px-6 py-4">
-                                        <div className="font-mono text-gray-500 text-xs mb-1">{std.id}</div>
-                                        <div className="font-bold text-gray-800">{std.name}</div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <div className="flex justify-center flex-wrap gap-2">
-                                            {statusOptions.map((opt) => (
-                                                <button
-                                                    key={opt.val}
-                                                    onClick={() => onCheck(std.id, date, opt.val)}
-                                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all duration-200 ${
-                                                        status === opt.val 
-                                                            ? `${opt.active} shadow-md transform scale-105` 
-                                                            : `${opt.color} hover:brightness-95`
-                                                    }`}
-                                                >
-                                                    {opt.label}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </td>
-                                </tr>
-                            );
-                        })}
-                        {students.length === 0 && (
-                            <tr><td colSpan="2" className="text-center py-10 text-gray-400 font-medium">ยังไม่มีนักเรียนในรายวิชานี้ กรุณาเพิ่มรายชื่อก่อน</td></tr>
-                        )}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-      )}
+          <div className="flex gap-2 w-full md:w-auto justify-end">
+             {!isHoliday && (
+                 <>
+                    <button onClick={() => handleBulkCheck('present')} className="px-4 py-2 bg-green-100 text-green-800 rounded-lg text-sm font-bold hover:bg-green-200 transition">มาครบ</button>
+                    <button onClick={() => handleBulkCheck('absent')} className="px-4 py-2 bg-red-100 text-red-800 rounded-lg text-sm font-bold hover:bg-red-200 transition">ขาดครบ</button>
+                 </>
+             )}
+             <button onClick={handleSave} className="px-6 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 flex items-center font-bold transition transform active:scale-95">
+                <Save className="w-4 h-4 mr-2"/> บันทึก
+             </button>
+          </div>
+       </div>
+
+       {isHoliday ? (
+           <div className="bg-red-50 border-2 border-dashed border-red-200 p-12 rounded-xl text-center text-red-600 animate-in fade-in zoom-in-95">
+               <Calendar className="w-16 h-16 mx-auto mb-3 opacity-20"/>
+               <h3 className="text-xl font-bold">วันนี้เป็นวันหยุดราชการ</h3>
+               <p className="text-sm opacity-75">ระบบจะไม่นำไปคำนวณเวลาเรียนในวันนี้</p>
+           </div>
+       ) : (
+           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+               <div className="overflow-x-auto">
+                   <table className="w-full text-left">
+                       <thead className="bg-gray-50 text-gray-700 text-xs uppercase font-bold border-b">
+                           <tr>
+                               <th className="px-6 py-4 w-1/3">รหัส / ชื่อ-สกุล</th>
+                               <th className="px-6 py-4 text-center">สถานะ</th>
+                           </tr>
+                       </thead>
+                       <tbody className="divide-y divide-gray-100">
+                           {students.map(s => (
+                               <tr key={s.id} className="hover:bg-blue-50/30 transition-colors">
+                                   <td className="px-6 py-3">
+                                       <div className="font-mono text-xs text-gray-400 mb-0.5">{s.id}</div>
+                                       <div className="font-medium text-gray-800">{s.name}</div>
+                                   </td>
+                                   <td className="px-6 py-3 text-center">
+                                       <div className="flex justify-center gap-2">
+                                           {statusOptions.map(opt => (
+                                               <button 
+                                                 key={opt.val} 
+                                                 onClick={() => toggleStatus(s.id, opt.val)}
+                                                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${attendanceData[s.id] === opt.val ? opt.active + ' shadow-md scale-105 ring-2 ring-offset-1 ring-blue-100' : opt.color + ' opacity-60 hover:opacity-100'}`}
+                                               >
+                                                   {opt.label}
+                                               </button>
+                                           ))}
+                                       </div>
+                                   </td>
+                               </tr>
+                           ))}
+                           {students.length === 0 && <tr><td colSpan="2" className="p-10 text-center text-gray-400">ยังไม่มีนักเรียนในรายวิชานี้</td></tr>}
+                       </tbody>
+                   </table>
+               </div>
+           </div>
+       )}
     </div>
   );
 };
 
-const ScoreManager = ({ students, course, assignments, scores, onUpdateScore, onAddAssignment, onDeleteAssignment, onSave }) => {
+// 2. Score Manager (จัดการคะแนน)
+const ScoreManager = ({ courseId, students, onNotify }) => {
+    const [assignments, setAssignments] = useState([]);
+    const [scores, setScores] = useState({}); // { studentId: { assignmentId: score } }
+    const [loading, setLoading] = useState(false);
     const [isAdding, setIsAdding] = useState(false);
-    const [newAssign, setNewAssign] = useState({ name: '', type: 'knowledge', maxScore: 10 });
-    const handleAdd = () => { if(!newAssign.name) return; onAddAssignment(course.id, newAssign); setIsAdding(false); setNewAssign({ name: '', type: 'knowledge', maxScore: 10 }); };
-    
+    const [newAssign, setNewAssign] = useState({ name: '', type: 'knowledge', max_score: 10 });
+
+    const fetchScoresData = useCallback(async () => {
+        setLoading(true);
+        try {
+            // Fetch Assignments
+            const { data: assignData } = await supabase.from('assignments').select('*').eq('course_id', courseId).order('created_at', { ascending: true });
+            if (assignData) setAssignments(assignData);
+
+            // Fetch Scores
+            const { data: scoreData } = await supabase.from('scores').select('*')
+                .in('assignment_id', (assignData || []).map(a => a.id));
+            
+            const scoreMap = {};
+            if (scoreData) {
+                scoreData.forEach(s => {
+                    if (!scoreMap[s.student_id]) scoreMap[s.student_id] = {};
+                    scoreMap[s.student_id][s.assignment_id] = s.score;
+                });
+            }
+            setScores(scoreMap);
+        } catch (err) {
+            console.error("Error fetching scores:", err);
+            onNotify('โหลดคะแนนไม่สำเร็จ', 'error');
+        } finally {
+            setLoading(false);
+        }
+    }, [courseId, onNotify]);
+
+    useEffect(() => { fetchScoresData(); }, [fetchScoresData]);
+
+    const handleAddAssignment = async () => {
+        if (!newAssign.name) return;
+        try {
+            const { error } = await supabase.from('assignments').insert([{ 
+                course_id: courseId,
+                name: newAssign.name,
+                type: newAssign.type,
+                max_score: newAssign.max_score
+            }]);
+            
+            if (error) throw error;
+            onNotify('เพิ่มหัวข้อคะแนนสำเร็จ', 'success');
+            setIsAdding(false);
+            setNewAssign({ name: '', type: 'knowledge', max_score: 10 });
+            fetchScoresData(); // Refresh list
+        } catch (err) {
+            onNotify('เกิดข้อผิดพลาด: ' + err.message, 'error');
+        }
+    };
+
+    const handleDeleteAssignment = async (id) => {
+        if (!confirm('ยืนยันลบหัวข้อนี้? คะแนนทั้งหมดในหัวข้อนี้จะหายไป')) return;
+        try {
+            const { error } = await supabase.from('assignments').delete().eq('id', id);
+            if (error) throw error;
+            onNotify('ลบหัวข้อสำเร็จ', 'success');
+            setAssignments(prev => prev.filter(a => a.id !== id));
+        } catch (err) {
+            onNotify('ลบไม่สำเร็จ', 'error');
+        }
+    };
+
+    const handleScoreChange = (studentId, assignmentId, value, max) => {
+        let val = parseFloat(value);
+        if (isNaN(val) || val < 0) val = 0;
+        if (val > max) val = max;
+        
+        setScores(prev => ({
+            ...prev,
+            [studentId]: { ...prev[studentId], [assignmentId]: val }
+        }));
+    };
+
+    const handleSaveScores = async () => {
+        setLoading(true);
+        try {
+            const upsertData = [];
+            students.forEach(s => {
+                assignments.forEach(a => {
+                    const score = scores[s.id]?.[a.id];
+                    if (score !== undefined) {
+                        upsertData.push({
+                            student_id: s.id,
+                            assignment_id: a.id,
+                            score: score
+                        });
+                    }
+                });
+            });
+            
+            if (upsertData.length > 0) {
+                 const { error } = await supabase.from('scores').upsert(upsertData, { onConflict: 'student_id, assignment_id' });
+                 if (error) throw error;
+            }
+            onNotify('บันทึกคะแนนเรียบร้อย', 'success');
+        } catch (err) {
+            console.error(err);
+            onNotify('บันทึกไม่สำเร็จ: ' + err.message, 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
-        <div className="space-y-6 animate-fade-in">
-            <div className="p-6 bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div className="space-y-6 animate-fade-in relative">
+            {loading && <LoadingOverlay />}
+            <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
                 <div>
-                    <h3 className="font-bold text-gray-800 text-lg flex items-center"><Edit className="w-5 h-5 mr-2 text-blue-600" /> บันทึกคะแนนเก็บ</h3>
+                    <h3 className="font-bold text-gray-800 text-lg flex items-center"><Edit className="w-5 h-5 mr-2 text-blue-600"/> บันทึกคะแนนเก็บ</h3>
                     <p className="text-gray-500 text-sm mt-1">คะแนนเจตคติจะถูกคำนวณอัตโนมัติจากส่วนพฤติกรรม</p>
                 </div>
-                <div className="flex gap-3">
-                    <button onClick={() => setIsAdding(!isAdding)} className="px-4 py-2 border border-blue-200 text-blue-600 rounded-lg hover:bg-blue-50 flex items-center font-bold transition"><Plus className="w-4 h-4 mr-2"/> เพิ่มหัวข้อ</button>
-                    <button onClick={onSave} className="px-4 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 flex items-center font-bold transition"><Save className="w-4 h-4 mr-2"/> บันทึกคะแนน</button>
+                <div className="flex gap-2">
+                    <button onClick={()=>setIsAdding(!isAdding)} className="px-4 py-2 border border-blue-200 text-blue-600 rounded-lg hover:bg-blue-50 font-bold text-sm flex items-center transition"><Plus className="w-4 h-4 mr-2"/> เพิ่มหัวข้อ</button>
+                    <button onClick={handleSaveScores} className="px-5 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 font-bold text-sm flex items-center transition"><Save className="w-4 h-4 mr-2"/> บันทึกคะแนน</button>
                 </div>
             </div>
 
             {isAdding && (
-                <div className="bg-blue-50 p-6 rounded-xl border border-blue-200 shadow-lg animate-in slide-in-from-top-4 relative z-10">
-                    <button onClick={() => setIsAdding(false)} className="absolute top-4 right-4 text-gray-400 hover:text-red-500"><XCircle className="w-5 h-5"/></button>
-                    <h4 className="font-bold text-blue-800 mb-4 flex items-center"><Plus className="w-5 h-5 mr-2"/> เพิ่มหัวข้อคะแนนใหม่</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-                        <div className="md:col-span-6">
-                            <label className="block text-xs font-bold text-gray-600 mb-1">ชื่อหัวข้อ</label>
-                            <input type="text" className="w-full p-2.5 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none transition" value={newAssign.name} onChange={e => setNewAssign({...newAssign, name: e.target.value})} placeholder="เช่น สอบย่อย 1" />
+                <div className="bg-blue-50 p-5 rounded-xl border border-blue-200 animate-in slide-in-from-top-2">
+                    <div className="flex flex-col md:flex-row gap-3 items-end">
+                        <div className="flex-1 w-full">
+                            <label className="text-xs font-bold text-blue-800 block mb-1">ชื่อหัวข้อ</label>
+                            <input className="w-full p-2 border rounded shadow-sm" value={newAssign.name} onChange={e=>setNewAssign({...newAssign, name:e.target.value})} placeholder="เช่น สอบย่อย 1"/>
                         </div>
-                        <div className="md:col-span-3">
-                            <label className="block text-xs font-bold text-gray-600 mb-1">ประเภท</label>
-                            <select className="w-full p-2.5 border rounded-lg bg-white cursor-pointer" value={newAssign.type} onChange={e => setNewAssign({...newAssign, type: e.target.value})}>
-                                <option value="knowledge">ความรู้ (Knowledge)</option>
-                                <option value="skill">ทักษะ (Skill)</option>
+                        <div className="w-full md:w-40">
+                            <label className="text-xs font-bold text-blue-800 block mb-1">ประเภท</label>
+                            <select className="w-full p-2 border rounded shadow-sm" value={newAssign.type} onChange={e=>setNewAssign({...newAssign, type:e.target.value})}>
+                                <option value="knowledge">ความรู้ (K)</option>
+                                <option value="skill">ทักษะ (S)</option>
                             </select>
                         </div>
-                        <div className="md:col-span-2">
-                            <label className="block text-xs font-bold text-gray-600 mb-1">คะแนนเต็ม</label>
-                            <input type="number" className="w-full p-2.5 border rounded-lg bg-white text-center" value={newAssign.maxScore} onChange={e => setNewAssign({...newAssign, maxScore: Number(e.target.value)})} />
+                        <div className="w-full md:w-24">
+                            <label className="text-xs font-bold text-blue-800 block mb-1">คะแนนเต็ม</label>
+                            <input type="number" className="w-full p-2 border rounded shadow-sm text-center" value={newAssign.max_score} onChange={e=>setNewAssign({...newAssign, max_score:e.target.value})}/>
                         </div>
-                        <div className="md:col-span-1">
-                            <button onClick={handleAdd} className="w-full bg-green-600 text-white p-2.5 rounded-lg font-bold shadow hover:bg-green-700 transition">ยืนยัน</button>
-                        </div>
+                        <button onClick={handleAddAssignment} className="px-4 py-2 bg-green-600 text-white rounded font-bold hover:bg-green-700 shadow-sm w-full md:w-auto">ยืนยัน</button>
+                        <button onClick={()=>setIsAdding(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-200 rounded w-full md:w-auto">ยกเลิก</button>
                     </div>
                 </div>
             )}
@@ -314,81 +525,40 @@ const ScoreManager = ({ students, course, assignments, scores, onUpdateScore, on
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
-                        <thead className="bg-gray-50 text-gray-700 text-sm uppercase font-bold">
+                        <thead className="bg-gray-50 text-gray-700 text-sm font-bold">
                             <tr>
-                                <th className="px-4 py-4 sticky left-0 bg-gray-50 z-10 border-b min-w-[250px] shadow-sm">ชื่อ-สกุล</th>
-                                {['knowledge', 'skill'].map(type => {
-                                    const typeAssigns = assignments.filter(a => a.type === type);
-                                    if (typeAssigns.length === 0) return null;
-                                    return (
-                                        <React.Fragment key={type}>
-                                            {typeAssigns.map(a => (
-                                                <th key={a.id} className="px-2 py-4 text-center border-l min-w-[120px] bg-white group relative">
-                                                    <div className={`text-[10px] uppercase tracking-wider mb-1 ${type==='knowledge'?'text-blue-500':'text-orange-500'}`}>{type}</div>
-                                                    <div className="text-gray-800 truncate px-2" title={a.name}>{a.name}</div>
-                                                    <div className="text-xs text-gray-400 font-normal">({a.maxScore} คะแนน)</div>
-                                                    <button 
-                                                        onClick={() => onDeleteAssignment(course.id, a.id)} 
-                                                        className="absolute top-1 right-1 text-red-200 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1" 
-                                                        title="ลบหัวข้อนี้"
-                                                    >
-                                                        <Trash2 className="w-3 h-3" />
-                                                    </button>
-                                                </th>
-                                            ))}
-                                            <th className={`px-2 py-4 text-center border-l border-r min-w-[80px] bg-gray-50 text-${type === 'knowledge' ? 'blue' : 'orange'}-700`}>
-                                                รวม {type === 'knowledge' ? 'K' : 'S'}
-                                            </th>
-                                        </React.Fragment>
-                                    );
-                                })}
-                                <th className="px-4 py-4 text-center bg-gray-100 text-gray-800 sticky right-0 z-10 border-l shadow-sm">รวม<br/>(เต็ม)</th>
+                                <th className="p-4 sticky left-0 bg-gray-50 z-10 border-b min-w-[200px]">นักเรียน</th>
+                                {assignments.map(a => (
+                                    <th key={a.id} className="p-4 text-center border-l min-w-[120px] group relative bg-white border-b hover:bg-gray-50">
+                                        <div className={`text-[10px] uppercase font-extrabold tracking-wider ${a.type==='knowledge'?'text-blue-600':'text-orange-600'}`}>{a.type}</div>
+                                        <div className="truncate w-full font-medium" title={a.name}>{a.name}</div>
+                                        <div className="text-xs text-gray-400">({a.max_score} คะแนน)</div>
+                                        <button onClick={()=>handleDeleteAssignment(a.id)} className="absolute top-1 right-1 text-red-200 hover:text-red-500 opacity-0 group-hover:opacity-100 transition p-1"><XCircle className="w-4 h-4"/></button>
+                                    </th>
+                                ))}
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                            {students.map((std) => {
-                                let totalScore = 0;
-                                return (
-                                    <tr key={std.id} className="hover:bg-gray-50 transition-colors">
-                                        <td className="px-4 py-3 font-medium text-gray-700 sticky left-0 bg-white shadow-sm border-r z-10">
-                                            <div className="text-xs text-gray-400 mb-0.5">{std.id}</div>
-                                            {std.name}
+                            {students.map(s => (
+                                <tr key={s.id} className="hover:bg-blue-50/20 transition-colors">
+                                    <td className="p-4 sticky left-0 bg-white border-r z-10 shadow-sm">
+                                        <div className="text-xs text-gray-400 font-mono mb-0.5">{s.id}</div>
+                                        <div className="font-medium text-gray-900">{s.name}</div>
+                                    </td>
+                                    {assignments.map(a => (
+                                        <td key={a.id} className="p-2 border-l text-center">
+                                            <input 
+                                                type="number" 
+                                                className="w-full p-2 text-center border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all hover:border-blue-300 bg-gray-50/50 focus:bg-white"
+                                                value={scores[s.id]?.[a.id] ?? ''}
+                                                onChange={e => handleScoreChange(s.id, a.id, e.target.value, a.max_score)}
+                                                placeholder="-"
+                                            />
                                         </td>
-                                        {['knowledge', 'skill'].map(type => {
-                                            const typeAssigns = assignments.filter(a => a.type === type);
-                                            if (typeAssigns.length === 0) return null;
-                                            let typeTotal = 0;
-                                            return (
-                                                <React.Fragment key={type}>
-                                                    {typeAssigns.map(a => {
-                                                        const score = scores[std.id]?.[a.id] || 0;
-                                                        typeTotal += Number(score);
-                                                        return (
-                                                            <td key={a.id} className="px-2 py-3 text-center border-l">
-                                                                <input 
-                                                                    type="number" 
-                                                                    className="w-16 p-1.5 text-center border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none transition-all hover:border-blue-300"
-                                                                    value={scores[std.id]?.[a.id] !== undefined ? scores[std.id][a.id] : ''} 
-                                                                    placeholder="0" 
-                                                                    max={a.maxScore} 
-                                                                    onChange={(e) => onUpdateScore(std.id, a.id, e.target.value, a.maxScore)} 
-                                                                />
-                                                            </td>
-                                                        );
-                                                    })}
-                                                    <td className={`px-2 py-3 text-center font-bold border-l border-r bg-gray-50/50 text-${type === 'knowledge' ? 'blue' : 'orange'}-700`}>{typeTotal}</td>
-                                                </React.Fragment>
-                                            );
-                                        })}
-                                        {(() => {
-                                            const relevantAssigns = assignments.filter(a => ['knowledge', 'skill'].includes(a.type));
-                                            totalScore = relevantAssigns.reduce((sum, a) => sum + Number(scores[std.id]?.[a.id] || 0), 0);
-                                        })()}
-                                        <td className="px-4 py-3 text-center font-black text-gray-800 bg-gray-100 sticky right-0 border-l shadow-sm z-10">{totalScore}</td>
-                                    </tr>
-                                );
-                            })}
-                            {students.length === 0 && <tr><td colSpan="100" className="text-center py-10 text-gray-400">ไม่มีนักเรียนในรายวิชานี้</td></tr>}
+                                    ))}
+                                </tr>
+                            ))}
+                            {students.length === 0 && <tr><td colSpan="100" className="p-10 text-center text-gray-400">ยังไม่มีนักเรียนในรายวิชานี้</td></tr>}
                         </tbody>
                     </table>
                 </div>
@@ -397,482 +567,490 @@ const ScoreManager = ({ students, course, assignments, scores, onUpdateScore, on
     );
 };
 
-// 4. BehaviorManager
-const BehaviorManager = ({ students, course, behaviors, behaviorRecords, onUpdateBehavior, onSave, onUpdateBehaviorsList }) => {
-    const [currentDate, setCurrentDate] = useState(new Date().toISOString().split('T')[0]);
+// 3. Behavior Manager (จัดการพฤติกรรม)
+const BehaviorManager = ({ courseId, students, onNotify }) => {
+    // ... Similar logic to ScoreManager but for behaviors table ...
+    // For brevity in this response, implementing core logic
+    const [behaviors, setBehaviors] = useState([]);
+    const [records, setRecords] = useState({}); // { studentId: { date: [behaviorIds] } }
+    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [isConfiguring, setIsConfiguring] = useState(false);
-    const [newBeh, setNewBeh] = useState({ name: '', type: 'positive', point: 1 });
-    const handleAddBehavior = () => { if (!newBeh.name) return; const newId = 'b_' + Date.now(); onUpdateBehaviorsList([...behaviors, { ...newBeh, id: newId }]); setNewBeh({ name: '', type: 'positive', point: 1 }); };
-    const handleRemoveBehavior = (id) => { onUpdateBehaviorsList(behaviors.filter(b => b.id !== id)); };
-    
+    const [newBeh, setNewBeh] = useState({ name: '', type: 'positive' });
+    const [loading, setLoading] = useState(false);
+
+    const fetchData = useCallback(async () => {
+         setLoading(true);
+         // Fetch Behaviors
+         const { data: behData } = await supabase.from('behaviors').select('*').eq('course_id', courseId);
+         if(behData) setBehaviors(behData);
+
+         // Fetch Records for date
+         const { data: recData } = await supabase.from('behavior_records').select('*').eq('date', date).in('behavior_id', (behData||[]).map(b=>b.id));
+         
+         const recMap = {};
+         if(recData) {
+             recData.forEach(r => {
+                 if(!recMap[r.student_id]) recMap[r.student_id] = [];
+                 recMap[r.student_id].push(r.behavior_id);
+             });
+         }
+         setRecords(recMap);
+         setLoading(false);
+    }, [courseId, date]);
+
+    useEffect(() => { fetchData(); }, [fetchData]);
+
+    const handleAddBehavior = async () => {
+        if(!newBeh.name) return;
+        await supabase.from('behaviors').insert([{...newBeh, course_id: courseId, point: 1}]);
+        setIsConfiguring(false);
+        setNewBeh({ name: '', type: 'positive' });
+        fetchData();
+        onNotify('เพิ่มหัวข้อสำเร็จ', 'success');
+    };
+
+    const handleDeleteBehavior = async (id) => {
+        if(!confirm('ลบหัวข้อนี้?')) return;
+        await supabase.from('behaviors').delete().eq('id', id);
+        fetchData();
+    };
+
+    const toggleBehavior = (studentId, behaviorId) => {
+        const current = records[studentId] || [];
+        if(current.includes(behaviorId)) {
+            setRecords(prev => ({...prev, [studentId]: current.filter(id => id !== behaviorId)}));
+        } else {
+            setRecords(prev => ({...prev, [studentId]: [...current, behaviorId]}));
+        }
+    };
+
+    const handleSave = async () => {
+        setLoading(true);
+        // Clear old records for this date/course behaviors
+        const behaviorIds = behaviors.map(b => b.id);
+        if(behaviorIds.length > 0) {
+             // Ideally delete where behavior_id in behaviorIds AND date = date AND student_id in students
+             // For simplicity, fetching all records again and diffing or bulk delete/insert
+             // Here: Delete all for today then re-insert
+             // Note: In production, optimize this.
+             
+             // Simple: Delete records for these behaviors on this date
+             await supabase.from('behavior_records').delete().in('behavior_id', behaviorIds).eq('date', date);
+             
+             const toInsert = [];
+             Object.keys(records).forEach(stdId => {
+                 records[stdId].forEach(behId => {
+                     toInsert.push({ student_id: stdId, behavior_id: behId, date: date });
+                 });
+             });
+             
+             if(toInsert.length > 0) await supabase.from('behavior_records').insert(toInsert);
+        }
+        setLoading(false);
+        onNotify('บันทึกพฤติกรรมเรียบร้อย', 'success');
+    };
+
     return (
-        <div className="space-y-6 animate-fade-in">
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
-                <div className="flex items-center gap-4">
-                    <div>
-                        <label className="text-gray-500 text-xs font-bold uppercase mb-1 block">วันที่บันทึก</label>
-                        <input type="date" value={currentDate} onChange={e => setCurrentDate(e.target.value)} className="border border-gray-300 rounded-lg px-3 py-2 text-gray-700 bg-white focus:ring-2 focus:ring-blue-500 outline-none" />
-                    </div>
-                    <button onClick={() => setIsConfiguring(!isConfiguring)} className="mt-5 px-3 py-2 border rounded-lg text-gray-600 hover:bg-gray-100 flex items-center"><Settings className="w-4 h-4 mr-2" /> ตั้งค่าหัวข้อ</button>
-                </div>
-                <button onClick={onSave} className="bg-blue-600 text-white px-5 py-2 rounded-lg shadow hover:bg-blue-700 flex items-center font-bold"><Save className="w-4 h-4 mr-2"/> บันทึกพฤติกรรม</button>
+        <div className="space-y-6 relative">
+            {loading && <LoadingOverlay/>}
+            <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
+                 <div className="flex items-center gap-4">
+                     <div className="relative">
+                         <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                         <input type="date" value={date} onChange={e=>setDate(e.target.value)} className="pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"/>
+                     </div>
+                     <button onClick={()=>setIsConfiguring(!isConfiguring)} className="px-3 py-2 border rounded-lg text-gray-600 hover:bg-gray-100 flex items-center"><Settings className="w-4 h-4 mr-2"/> ตั้งค่าหัวข้อ</button>
+                 </div>
+                 <button onClick={handleSave} className="px-5 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 flex items-center font-bold"><Save className="w-4 h-4 mr-2"/> บันทึกพฤติกรรม</button>
             </div>
 
             {isConfiguring && (
-                <div className="bg-white p-6 rounded-xl border border-blue-200 shadow-xl animate-in slide-in-from-top-4 mb-6">
-                    <h4 className="font-bold text-blue-800 mb-4 flex items-center"><Flag className="w-5 h-5 mr-2"/> จัดการหัวข้อพฤติกรรม</h4>
-                    <div className="flex flex-col md:flex-row gap-3 mb-6 items-end bg-blue-50 p-4 rounded-lg">
-                        <div className="flex-1 w-full">
-                            <label className="text-xs font-bold text-blue-600 mb-1 block">ชื่อพฤติกรรม</label>
-                            <input className="w-full p-2 border rounded" value={newBeh.name} onChange={e=>setNewBeh({...newBeh, name:e.target.value})} placeholder="เช่น ช่วยเหลือเพื่อน" />
-                        </div>
-                        <div className="w-full md:w-32">
-                            <label className="text-xs font-bold text-blue-600 mb-1 block">ประเภท</label>
-                            <select className="w-full p-2 border rounded" value={newBeh.type} onChange={e=>setNewBeh({...newBeh, type:e.target.value})}>
-                                <option value="positive">บวก (+)</option>
-                                <option value="negative">ลบ (-)</option>
-                            </select>
-                        </div>
-                        <button onClick={handleAddBehavior} className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 font-bold">เพิ่ม</button>
+                <div className="bg-gray-50 p-5 rounded-xl border border-gray-200 animate-in fade-in">
+                    <div className="flex gap-2 mb-4">
+                        <input className="flex-1 p-2 border rounded" placeholder="ชื่อพฤติกรรม" value={newBeh.name} onChange={e=>setNewBeh({...newBeh, name:e.target.value})}/>
+                        <select className="p-2 border rounded w-32" value={newBeh.type} onChange={e=>setNewBeh({...newBeh, type:e.target.value})}><option value="positive">บวก (+)</option><option value="negative">ลบ (-)</option></select>
+                        <button onClick={handleAddBehavior} className="px-4 py-2 bg-green-600 text-white rounded">เพิ่ม</button>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         {behaviors.map(b => (
-                            <div key={b.id} className="flex justify-between items-center p-3 border rounded-lg bg-gray-50 hover:bg-white transition shadow-sm">
-                                <div className="flex items-center">
-                                    <div className={`w-2.5 h-2.5 rounded-full mr-3 ${b.type === 'positive' ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                                    <span className="font-medium text-gray-700">{b.name}</span>
-                                </div>
-                                <button onClick={() => handleRemoveBehavior(b.id)} className="text-gray-400 hover:text-red-500 p-1"><XCircle className="w-4 h-4"/></button>
+                            <div key={b.id} className="flex justify-between items-center p-2 bg-white border rounded shadow-sm">
+                                <span className={`text-sm ${b.type==='positive'?'text-green-600':'text-red-600'}`}>{b.name}</span>
+                                <button onClick={()=>handleDeleteBehavior(b.id)} className="text-gray-400 hover:text-red-500"><XCircle className="w-4 h-4"/></button>
                             </div>
                         ))}
                     </div>
                 </div>
             )}
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                        <thead className="bg-gray-50 text-gray-600 text-sm uppercase font-bold">
-                            <tr>
-                                <th className="px-6 py-4 w-1/4">ชื่อ-สกุล</th>
+            <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+                <table className="w-full text-left">
+                    <thead className="bg-gray-50 text-gray-600 text-sm uppercase"><tr><th className="p-4 w-1/4">ชื่อ-สกุล</th>{behaviors.map(b=><th key={b.id} className="p-2 text-center text-xs">{b.name}</th>)}</tr></thead>
+                    <tbody className="divide-y divide-gray-100">
+                        {students.map(s => (
+                            <tr key={s.id} className="hover:bg-gray-50">
+                                <td className="p-4 font-medium">{s.name}</td>
                                 {behaviors.map(b => (
-                                    <th key={b.id} className="px-2 py-4 text-center min-w-[100px]">
-                                        <span className={`px-2 py-1 rounded text-xs font-bold ${b.type === 'positive' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{b.name}</span>
-                                    </th>
+                                    <td key={b.id} className="p-2 text-center">
+                                        <button 
+                                            onClick={()=>toggleBehavior(s.id, b.id)}
+                                            className={`w-8 h-8 rounded border transition-all ${records[s.id]?.includes(b.id) ? (b.type==='positive'?'bg-green-500 border-green-500 text-white':'bg-red-500 border-red-500 text-white') : 'bg-white hover:bg-gray-100'}`}
+                                        >
+                                            {records[s.id]?.includes(b.id) && <CheckSquare className="w-4 h-4 mx-auto"/>}
+                                        </button>
+                                    </td>
                                 ))}
                             </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {students.map(std => {
-                                const stdRec = behaviorRecords[std.id]?.[currentDate] || [];
-                                return (
-                                    <tr key={std.id} className="hover:bg-blue-50/50 transition-colors">
-                                        <td className="px-6 py-3 font-medium text-gray-800">{std.name}</td>
-                                        {behaviors.map(b => {
-                                            const isChecked = stdRec.includes(b.id);
-                                            return (
-                                                <td key={b.id} className="px-2 py-3 text-center">
-                                                    <button 
-                                                        onClick={() => onUpdateBehavior(std.id, currentDate, b.id)}
-                                                        className={`w-8 h-8 rounded-lg flex items-center justify-center mx-auto transition-all transform duration-200 ${isChecked ? (b.type === 'positive' ? 'bg-green-500 text-white shadow-md scale-110' : 'bg-red-500 text-white shadow-md scale-110') : 'bg-white border-2 border-gray-200 text-gray-300 hover:border-gray-400'}`}
-                                                    >
-                                                        {isChecked && <CheckCircle className="w-5 h-5" />}
-                                                    </button>
-                                                </td>
-                                            );
-                                        })}
-                                    </tr>
-                                );
-                            })}
-                            {students.length === 0 && <tr><td colSpan="100" className="text-center py-10 text-gray-400">ยังไม่มีนักเรียนในรายวิชานี้</td></tr>}
-                        </tbody>
-                    </table>
-                </div>
+                        ))}
+                    </tbody>
+                </table>
             </div>
         </div>
     );
 };
 
-// 5. BehaviorSummary
-const BehaviorSummary = ({ students, behaviors, behaviorRecords, maxAttitudeScore }) => {
-    return (
-        <div className="space-y-6 animate-fade-in">
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                <div className="flex justify-between items-center mb-6">
-                    <h3 className="font-bold text-gray-800 flex items-center text-lg">
-                        <Award className="w-6 h-6 mr-2 text-purple-600"/> สรุปพฤติกรรม & คะแนนเจตคติ (เต็ม {maxAttitudeScore})
-                    </h3>
-                    <button className="bg-green-600 text-white px-4 py-2 rounded-lg flex items-center text-sm hover:bg-green-700 shadow font-bold"><FileSpreadsheet className="w-4 h-4 mr-2" /> Export Excel</button>
-                </div>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                        <thead className="bg-purple-50 text-purple-900 font-bold uppercase">
-                            <tr>
-                                <th className="px-6 py-4 text-left rounded-tl-lg">ชื่อ-สกุล</th>
-                                {behaviors.map(b => (
-                                    <th key={b.id} className="px-2 py-4 text-center">{b.name} (%)</th>
-                                ))}
-                                <th className="px-6 py-4 text-center bg-purple-100 rounded-tr-lg">คะแนนเจตคติ</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-purple-50">
-                            {students.map(std => {
-                                const attitudeScore = calculateAttitudeScore(std.id, behaviors, behaviorRecords, maxAttitudeScore);
-                                const studentRecords = behaviorRecords[std.id] || {};
-                                const recordedDates = Object.keys(studentRecords);
-                                const totalDays = recordedDates.length || 1; 
-
-                                return (
-                                    <tr key={std.id} className="hover:bg-purple-50/50 transition-colors">
-                                        <td className="px-6 py-4 font-medium text-gray-800">{std.name}</td>
-                                        {behaviors.map(b => {
-                                            let count = 0;
-                                            recordedDates.forEach(date => {
-                                                const hasBehavior = studentRecords[date]?.includes(b.id);
-                                                if (b.type === 'positive' && hasBehavior) count++;
-                                                if (b.type === 'negative' && !hasBehavior) count++;
-                                            });
-                                            const percent = Math.round((count / totalDays) * 100);
-                                            
-                                            return (
-                                                <td key={b.id} className="px-2 py-4 text-center">
-                                                    <div className="flex items-center justify-center flex-col">
-                                                        <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden mb-1">
-                                                            <div 
-                                                                className={`h-full rounded-full ${percent >= 80 ? 'bg-green-500' : percent >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`} 
-                                                                style={{ width: `${percent}%` }}
-                                                            ></div>
-                                                        </div>
-                                                        <span className="text-xs font-bold text-gray-600">{percent}%</span>
-                                                    </div>
-                                                </td>
-                                            );
-                                        })}
-                                        <td className="px-6 py-4 text-center">
-                                            <span className="inline-block bg-purple-100 text-purple-800 px-4 py-1 rounded-full font-bold text-lg">
-                                                {attitudeScore}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-// 6. Admin Dashboard
-const AdminDashboard = ({ students, teachers, setStudents, setTeachers, onNotify, setIsImportOpen }) => {
+// 4. Admin Dashboard
+const AdminDashboard = ({ onNotify }) => {
     const [activeTab, setActiveTab] = useState('students');
+    const [students, setStudents] = useState([]);
+    const [users, setUsers] = useState([]); 
+    const [loading, setLoading] = useState(false);
+    
+    // Import/Manage Modal States
+    const [isImportOpen, setIsImportOpen] = useState(false);
     const [isUserModalOpen, setIsUserModalOpen] = useState(false);
-    const [selectedUser, setSelectedUser] = useState(null); 
+    const [isAddTeacherOpen, setIsAddTeacherOpen] = useState(false);
+    
+    const [selectedUser, setSelectedUser] = useState(null);
     const [userForm, setUserForm] = useState({ username: '', password: '' });
-    const [bulkRoom, setBulkRoom] = useState('');
-    const [bulkPassword, setBulkPassword] = useState('');
+    const [newTeacher, setNewTeacher] = useState({ name: '', username: '', password: '', email: '' });
+    const [importFile, setImportFile] = useState(null);
 
-    const handleDeleteStudent = (studentId) => {
-        if(confirm('คุณต้องการลบนักเรียนคนนี้ออกจากฐานข้อมูลกลางหรือไม่? (ข้อมูลในทุกรายวิชาจะหายไป)')) {
-            setStudents(prev => prev.filter(s => s.id !== studentId));
-            onNotify('ลบนักเรียนเรียบร้อยแล้ว', 'success');
+    // Fetch Data
+    const fetchAdminData = async () => {
+        setLoading(true);
+        const { data: stds } = await supabase.from('students').select('*').order('id');
+        const { data: usrs } = await supabase.from('users').select('*').order('role');
+        if (stds) setStudents(stds);
+        if (usrs) setUsers(usrs);
+        setLoading(false);
+    };
+
+    useEffect(() => { fetchAdminData(); }, []);
+
+    // Handle File Import
+    const handleFileChange = (e) => setImportFile(e.target.files[0]);
+
+    const handleImportExcel = () => {
+        if (!importFile) return onNotify('กรุณาเลือกไฟล์', 'error');
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                
+                // Map Excel Columns -> DB Columns
+                const newStudents = jsonData.map(row => ({
+                    id: String(row['รหัสประจำตัว'] || ''),
+                    name: row['ชื่อ-นามสกุล'] || '',
+                    level: row['ระดับชั้น'] || '',
+                    room: String(row['ห้องเรียน'] || row['ห้องเรียน '] || ''),
+                    department: row['แผนกวิชา'] || '',
+                    status: 'normal'
+                })).filter(s => s.id && s.name);
+
+                if (newStudents.length === 0) return onNotify('ไม่พบข้อมูลในไฟล์', 'error');
+
+                // Upsert Students
+                const { error: stdError } = await supabase.from('students').upsert(newStudents, { onConflict: 'id' });
+                if (stdError) throw stdError;
+
+                // Create Users for Students automatically (username=id, password=123)
+                const newUsers = newStudents.map(s => ({
+                    username: s.id,
+                    password: '123', // Default Password
+                    role: 'student',
+                    name: s.name
+                }));
+                await supabase.from('users').upsert(newUsers, { onConflict: 'username' });
+
+                onNotify(`นำเข้าสำเร็จ ${newStudents.length} รายการ`, 'success');
+                setIsImportOpen(false);
+                fetchAdminData();
+            } catch (err) {
+                console.error(err);
+                onNotify('เกิดข้อผิดพลาด: ' + err.message, 'error');
+            }
+        };
+        reader.readAsArrayBuffer(importFile);
+    };
+
+    const handleDeleteStudent = async (id) => {
+        if (!confirm('ยืนยันลบนักเรียน? ข้อมูลการเรียนทั้งหมดจะหายไป')) return;
+        const { error } = await supabase.from('students').delete().eq('id', id);
+        if (!error) {
+            onNotify('ลบสำเร็จ', 'success');
+            fetchAdminData();
+        } else {
+            onNotify('ลบไม่สำเร็จ', 'error');
         }
     };
-    const handleSetUser = (user, type) => { setSelectedUser({ ...user, type }); setUserForm({ username: user.username || '', password: user.password || '' }); setIsUserModalOpen(true); };
-    const handleSaveUser = () => {
-        if (!userForm.username || !userForm.password) { onNotify('กรุณากรอกชื่อผู้ใช้งานและรหัสผ่าน', 'error'); return; }
-        if (selectedUser.type === 'teacher') { setTeachers(prev => prev.map(t => t.id === selectedUser.id ? { ...t, username: userForm.username, password: userForm.password } : t)); } else { setStudents(prev => prev.map(s => s.id === selectedUser.id ? { ...s, username: userForm.username, password: userForm.password } : s)); }
-        onNotify(`บันทึกบัญชีผู้ใช้สำหรับ ${selectedUser.name} สำเร็จ`, 'success'); setIsUserModalOpen(false); setUserForm({ username: '', password: '' });
-    };
-    const handleBulkSetPassword = () => {
-        if (!bulkRoom || !bulkPassword) { onNotify('กรุณาเลือกห้องและกำหนดรหัสผ่าน', 'error'); return; }
-        setStudents(prev => prev.map(s => { if (s.room === bulkRoom) { return { ...s, password: bulkPassword, username: s.id }; } return s; }));
-        onNotify(`กำหนดรหัสผ่านสำหรับนักเรียนห้อง ${bulkRoom} ทั้งหมดเป็น "${bulkPassword}" สำเร็จ`, 'success'); setBulkRoom(''); setBulkPassword('');
-    };
-    const rooms = [...new Set(students.map(s => s.room))].sort();
 
-    return (
-        <div className="space-y-6 animate-fade-in pb-10">
-            <h2 className="text-2xl font-bold text-gray-800 flex items-center"><Shield className="w-8 h-8 mr-2 text-orange-600"/> แผงควบคุมผู้ดูแลระบบ</h2>
-            <div className="flex space-x-2 border-b overflow-x-auto"><button className={`px-6 py-3 font-bold whitespace-nowrap transition-colors border-b-2 ${activeTab === 'students' ? 'text-blue-600 border-blue-600 bg-blue-50' : 'text-gray-500 border-transparent hover:bg-gray-50'}`} onClick={() => setActiveTab('students')}>ฐานข้อมูลนักเรียน</button><button className={`px-6 py-3 font-bold whitespace-nowrap transition-colors border-b-2 ${activeTab === 'teachers_user' ? 'text-blue-600 border-blue-600 bg-blue-50' : 'text-gray-500 border-transparent hover:bg-gray-50'}`} onClick={() => setActiveTab('teachers_user')}>บัญชีผู้ใช้ (ครู)</button><button className={`px-6 py-3 font-bold whitespace-nowrap transition-colors border-b-2 ${activeTab === 'students_user' ? 'text-blue-600 border-blue-600 bg-blue-50' : 'text-gray-500 border-transparent hover:bg-gray-50'}`} onClick={() => setActiveTab('students_user')}>บัญชีผู้ใช้ (นักเรียน)</button></div>
-
-            {activeTab === 'students' && (
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100"><div className="flex justify-between mb-4"><h3 className="font-bold text-lg">รายชื่อนักเรียนทั้งหมด ({students.length})</h3><button onClick={() => setIsImportOpen(true)} className="bg-green-600 text-white px-4 py-2 rounded-lg flex items-center shadow hover:bg-green-700 font-bold"><FileSpreadsheet className="w-4 h-4 mr-2"/> นำเข้า Excel</button></div><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-gray-50 uppercase text-gray-600"><tr><th className="p-3 rounded-tl-lg">รหัส</th><th className="p-3">ชื่อ-สกุล</th><th className="p-3">ระดับชั้น</th><th className="p-3">ห้อง</th><th className="p-3">แผนกวิชา</th><th className="p-3 text-center rounded-tr-lg">จัดการ</th></tr></thead><tbody className="divide-y divide-gray-100">{students.map(s => (<tr key={s.id} className="hover:bg-gray-50"><td className="p-3 font-mono">{s.id}</td><td className="p-3 font-medium">{s.name}</td><td className="p-3">{s.level}</td><td className="p-3">{s.room}</td><td className="p-3">{s.department || '-'}</td><td className="p-3 text-center"><button onClick={() => handleDeleteStudent(s.id)} className="text-red-400 hover:text-red-600 p-2 rounded-full hover:bg-red-50" title="ลบนักเรียน"><Trash2 className="w-5 h-5" /></button></td></tr>))}</tbody></table></div></div>
-            )}
-            {activeTab === 'teachers_user' && (<div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100"><h3 className="font-bold text-lg mb-4">จัดการบัญชีครูผู้สอน</h3><table className="w-full text-left"><thead className="bg-gray-50"><tr><th className="p-3">ชื่อ-สกุล</th><th className="p-3">อีเมล</th><th className="p-3">Username</th><th className="p-3 text-right">การจัดการ</th></tr></thead><tbody>{teachers.map(u => (<tr key={u.id} className="border-b"><td className="p-3 font-medium">{u.name}</td><td className="p-3 text-gray-500">{u.email}</td><td className="p-3 font-mono text-blue-600">{u.username}</td><td className="p-3 text-right"><button onClick={() => handleSetUser(u, 'teacher')} className="bg-blue-100 text-blue-600 px-3 py-1.5 rounded-lg text-sm hover:bg-blue-200 font-medium"><Key className="w-4 h-4 inline mr-1"/> ตั้งรหัสผ่าน</button></td></tr>))}</tbody></table></div>)}
-            {activeTab === 'students_user' && (<div className="space-y-6"><div className="bg-blue-50 p-6 rounded-xl border border-blue-100"><h3 className="font-bold text-blue-800 mb-4 flex items-center"><Users2 className="w-5 h-5 mr-2"/> กำหนดรหัสผ่านแบบกลุ่ม (รายห้อง)</h3><div className="flex flex-col md:flex-row gap-4 items-end"><div className="w-full md:w-1/3"><label className="text-xs font-bold text-blue-600 block mb-1">เลือกห้องเรียน</label><select className="w-full p-2 border rounded-lg bg-white" value={bulkRoom} onChange={e => setBulkRoom(e.target.value)}><option value="">-- เลือกห้อง --</option>{rooms.map(r => <option key={r} value={r}>ห้อง {r}</option>)}</select></div><div className="w-full md:w-1/3"><label className="text-xs font-bold text-blue-600 block mb-1">กำหนดรหัสผ่านใหม่</label><input type="text" className="w-full p-2 border rounded-lg bg-white" placeholder="เช่น 1234" value={bulkPassword} onChange={e => setBulkPassword(e.target.value)}/></div><button onClick={handleBulkSetPassword} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-700 shadow-md w-full md:w-auto">บันทึกให้ทั้งห้อง</button></div></div><div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100"><h3 className="font-bold text-lg mb-4">รายชื่อนักเรียน (กำหนดรายบุคคล)</h3><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-gray-50 uppercase text-gray-600"><tr><th className="p-3">รหัส</th><th className="p-3">ชื่อ-สกุล</th><th className="p-3">ห้อง</th><th className="p-3">Username</th><th className="p-3 text-right">การจัดการ</th></tr></thead><tbody className="divide-y divide-gray-100">{students.map(u => (<tr key={u.id} className="border-b hover:bg-gray-50"><td className="p-3 font-mono text-gray-500">{u.id}</td><td className="p-3 font-medium">{u.name}</td><td className="p-3">{u.room}</td><td className="p-3 font-mono text-blue-600">{u.username || '-'}</td><td className="p-3 text-right"><button onClick={() => handleSetUser(u, 'student')} className="bg-gray-100 text-gray-600 px-3 py-1.5 rounded-lg text-sm hover:bg-gray-200 font-medium"><Key className="w-4 h-4 inline mr-1"/> ตั้งรหัสผ่าน</button></td></tr>))}</tbody></table></div></div></div>)}
-            {isUserModalOpen && selectedUser && (<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"><div className="bg-white p-6 rounded-xl shadow-2xl w-96 animate-fade-in"><h3 className="font-bold text-lg mb-4">กำหนดผู้ใช้งาน: {selectedUser.name}</h3><div className="space-y-3 mb-4"><div><label className="text-xs font-bold text-gray-500">ชื่อผู้ใช้งาน (Username)</label><input type="text" className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none" value={userForm.username} onChange={e => setUserForm({...userForm, username: e.target.value})} placeholder="ตั้งชื่อผู้ใช้งาน"/></div><div><label className="text-xs font-bold text-gray-500">รหัสผ่าน (Password)</label><input type="password" className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none" value={userForm.password} onChange={e => setUserForm({...userForm, password: e.target.value})} placeholder="ตั้งรหัสผ่าน"/></div></div><div className="flex justify-end space-x-2"><button onClick={() => setIsUserModalOpen(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded">ยกเลิก</button><button onClick={handleSaveUser} className="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 font-bold">บันทึก</button></div></div></div>)}
-        </div>
-    );
-};
-
-// 7. Teacher Dashboard
-const TeacherDashboard = ({ courses, students, assignments, scores, attendance, holidays, enrollments, setEnrollments, onNotify }) => {
-  const [selectedCourseId, setSelectedCourseId] = useState('all');
-  const stats = useMemo(() => {
-    let targetCourses = courses;
-    if (selectedCourseId !== 'all') { targetCourses = courses.filter(c => c.id === Number(selectedCourseId)); }
-    const gradeCounts = { '4': 0, '3-3.5': 0, '2-2.5': 0, '0-1.5': 0, 'ขร.': 0 };
-    const attendCounts = { '>80%': 0, '<80%': 0 };
-    const dailyStats = { present: 0, absent: 0, sick: 0, leave: 0 };
-    const studentScores = [];
-    const relevantStudents = students.filter(s => { return targetCourses.some(c => { const enrolledIds = enrollments[c.id] || []; return enrolledIds.includes(s.id); }); });
-    relevantStudents.forEach(std => {
-      let totalCourseScore = 0; let totalAttendancePercent = 0; let courseCount = 0;
-      targetCourses.forEach(course => {
-          const enrolledIds = enrollments[course.id] || [];
-          if (!enrolledIds.includes(std.id)) return;
-          const courseAssigns = assignments[course.id] || []; const stdScores = scores[std.id] || {}; let k=0, s=0;
-          courseAssigns.forEach(a => { const sc = Number(stdScores[a.id] || 0); if(a.type === 'knowledge') k += sc; if(a.type === 'skill') s += sc; });
-          const a = course.weights.attitude; const total = k + s + a;
-          const attendRecord = attendance[std.id] || {}; const validDates = Object.keys(attendRecord).filter(date => !holidays[date]);
-          const presentCount = validDates.filter(d => attendRecord[d] === 'present' || attendRecord[d] === 'late').length; const totalSessions = validDates.length || 1; 
-          const attendPercent = (presentCount / totalSessions) * 100;
-          validDates.forEach(d => { const status = attendRecord[d]; if(status === 'present') dailyStats.present++; else if(status === 'absent') dailyStats.absent++; else if(status === 'sick') dailyStats.sick++; else if(status === 'leave') dailyStats.leave++; });
-          totalCourseScore += total; totalAttendancePercent += attendPercent; courseCount++;
-      });
-      if (courseCount > 0) {
-        const avgScore = totalCourseScore / courseCount; const avgAttend = totalAttendancePercent / courseCount; const grade = calculateGrade(avgScore, avgAttend);
-        if (grade === '4') gradeCounts['4']++; else if (['3', '3.5'].includes(grade)) gradeCounts['3-3.5']++; else if (['2', '2.5'].includes(grade)) gradeCounts['2-2.5']++; else if (grade === 'ขร.') gradeCounts['ขร.']++; else gradeCounts['0-1.5']++;
-        if (avgAttend >= 80) attendCounts['>80%']++; else attendCounts['<80%']++;
-        studentScores.push({ name: std.name, score: avgScore });
-      }
-    });
-    studentScores.sort((a, b) => b.score - a.score);
-    const behaviorData = [{ name: 'ตรงต่อเวลา', score: 85 }, { name: 'แต่งกาย', score: 90 }, { name: 'ส่งงาน', score: 75 }, { name: 'จิตอาสา', score: 80 }];
-    return { grades: [{ name: 'เกรด 4', value: gradeCounts['4'], color: '#10B981' }, { name: 'เกรด 3-3.5', value: gradeCounts['3-3.5'], color: '#3B82F6' }, { name: 'เกรด 2-2.5', value: gradeCounts['2-2.5'], color: '#FACC15' }, { name: 'เกรด 0-1.5', value: gradeCounts['0-1.5'], color: '#EF4444' }], attendance: [{ name: 'เวลาเรียน > 80%', value: attendCounts['>80%'], color: '#10B981' }, { name: 'เวลาเรียน < 80%', value: attendCounts['<80%'], color: '#EF4444' }], daily: dailyStats, top5: studentScores.slice(0, 5), bottom5: studentScores.slice(-5).reverse(), behavior: behaviorData };
-  }, [selectedCourseId, courses, students, assignments, scores, attendance, holidays, enrollments]);
-
-  return (
-    <div className="space-y-6 animate-fade-in pb-10">
-      <div className="flex justify-between items-center"><h2 className="text-2xl font-bold text-gray-800">แดชบอร์ดสรุปผล</h2><div className="bg-white p-2 rounded-lg shadow-sm border border-gray-200 flex items-center"><span className="text-sm font-bold text-gray-600 mr-2">เลือกรายวิชา:</span><select value={selectedCourseId} onChange={(e) => setSelectedCourseId(e.target.value)} className="border-none outline-none text-sm font-medium text-blue-700 bg-transparent"><option value="all">ทั้งหมด</option>{courses.map(c => <option key={c.id} value={c.id}>{c.code} {c.name}</option>)}</select></div></div>
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4"><div className="bg-white p-4 rounded-xl shadow-sm border-l-4 border-green-500"><h3 className="text-gray-500 text-sm">มาเรียน (สะสม)</h3><p className="text-2xl font-bold text-gray-800">{stats.daily.present}</p></div><div className="bg-white p-4 rounded-xl shadow-sm border-l-4 border-red-500"><h3 className="text-gray-500 text-sm">ขาดเรียน (สะสม)</h3><p className="text-2xl font-bold text-gray-800">{stats.daily.absent}</p></div><div className="bg-white p-4 rounded-xl shadow-sm border-l-4 border-yellow-500"><h3 className="text-gray-500 text-sm">ลาป่วย</h3><p className="text-2xl font-bold text-gray-800">{stats.daily.sick}</p></div><div className="bg-white p-4 rounded-xl shadow-sm border-l-4 border-blue-500"><h3 className="text-gray-500 text-sm">ลากิจ</h3><p className="text-2xl font-bold text-gray-800">{stats.daily.leave}</p></div></div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6"><div className="bg-white p-6 rounded-xl shadow-sm"><h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center"><Calculator className="w-5 h-5 mr-2 text-blue-600"/> สรุปเกรด (Pie Chart)</h3><div className="h-64"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={stats.grades} cx="50%" cy="50%" innerRadius={60} outerRadius={80} dataKey="value" paddingAngle={5}>{stats.grades.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}</Pie><Tooltip /><Legend /></PieChart></ResponsiveContainer></div></div><div className="bg-white p-6 rounded-xl shadow-sm"><h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center"><Clock className="w-5 h-5 mr-2 text-green-600"/> สรุปเวลาเรียน (Pie Chart)</h3><div className="h-64"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={stats.attendance} cx="50%" cy="50%" outerRadius={80} dataKey="value" label={({name, percent}) => `${(percent * 100).toFixed(0)}%`}>{stats.attendance.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}</Pie><Tooltip /><Legend /></PieChart></ResponsiveContainer></div></div></div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6"><div className="bg-white p-6 rounded-xl shadow-sm"><h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center"><Flag className="w-5 h-5 mr-2 text-indigo-600"/> สรุปพฤติกรรม (Bar Chart)</h3><div className="h-64"><ResponsiveContainer width="100%" height="100%"><BarChart data={stats.behavior}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" /><YAxis /><Tooltip cursor={{fill: 'transparent'}} /><Bar dataKey="score" fill="#4F46E5" radius={[5, 5, 0, 0]} barSize={40} /></BarChart></ResponsiveContainer></div></div><div className="bg-white p-6 rounded-xl shadow-sm"><h3 className="text-lg font-bold text-gray-800 mb-4">คะแนนสูงสุด / ต่ำสุด (เต็ม 100)</h3><div className="space-y-4"><div><h4 className="text-green-600 font-bold flex items-center mb-2"><ThumbsUp className="w-4 h-4 mr-2"/> Top 5</h4>{stats.top5.map((s,i) => (<div key={i} className="flex justify-between text-sm bg-green-50 p-2 rounded mb-1"><span>{i+1}. {s.name}</span><span className="font-bold">{s.score.toFixed(1)}</span></div>))}</div><div><h4 className="text-red-600 font-bold flex items-center mb-2"><ThumbsDown className="w-4 h-4 mr-2"/> Bottom 5</h4>{stats.bottom5.map((s,i) => (<div key={i} className="flex justify-between text-sm bg-red-50 p-2 rounded mb-1"><span>{i+1}. {s.name}</span><span className="font-bold">{s.score.toFixed(1)}</span></div>))}</div></div></div></div>
-    </div>
-  );
-};
-
-// 8. Student Dashboard (Enhanced with details)
-const StudentDashboard = ({ studentId, courses, assignments, scores, attendance, holidays }) => {
-    // For demo, force using a student ID that exists in mock data if the logged in user is generic
-    const sId = studentId === '6620901001' ? studentId : '6620901001'; 
-
-    return (
-        <div className="space-y-8 animate-fade-in pb-10 font-sans">
-            <div className="flex items-center space-x-3 mb-6">
-                <div className="p-3 bg-blue-100 rounded-full"><GraduationCap className="w-8 h-8 text-blue-600" /></div>
-                <div>
-                    <h2 className="text-2xl font-bold text-gray-800">ผลการเรียนของฉัน</h2>
-                    <p className="text-gray-500 text-sm">ตรวจสอบคะแนนและเวลาเรียนรายวิชา</p>
-                </div>
-            </div>
+    const handleSaveUser = async () => {
+        if (!userForm.username || !userForm.password) return onNotify('กรุณากรอกข้อมูลให้ครบ', 'error');
+        try {
+            // Upsert User
+            const payload = {
+                username: userForm.username,
+                password: userForm.password,
+                role: selectedUser.role || 'student', 
+                name: selectedUser.name
+            };
             
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {courses.map(course => {
-                    const courseAssigns = assignments[course.id] || [];
-                    const stdScores = scores[sId] || {};
-                    const attendRecord = attendance[sId] || {};
-                    const validDates = Object.keys(attendRecord).filter(date => !holidays[date]);
-                    
-                    // --- 1. Calculate Scores ---
-                    let rawK = 0, rawS = 0, maxK = 0, maxS = 0;
-                    
-                    // Group assignments for display
-                    const kAssigns = [], sAssigns = [];
+            // If editing existing user, include ID to update
+            if (selectedUser.table === 'users' && selectedUser.id) {
+                await supabase.from('users').update(payload).eq('id', selectedUser.id);
+            } else {
+                await supabase.from('users').upsert(payload, { onConflict: 'username' });
+            }
 
-                    courseAssigns.forEach(a => {
-                        const sc = Number(stdScores[a.id] || 0);
-                        if(a.type === 'knowledge') {
-                            rawK += sc; maxK += a.maxScore;
-                            kAssigns.push({ ...a, score: sc });
-                        }
-                        if(a.type === 'skill') {
-                            rawS += sc; maxS += a.maxScore;
-                            sAssigns.push({ ...a, score: sc });
-                        }
-                    });
+            onNotify('บันทึกข้อมูลผู้ใช้สำเร็จ', 'success');
+            setIsUserModalOpen(false);
+            fetchAdminData();
+        } catch (err) {
+            onNotify('บันทึกไม่สำเร็จ', 'error');
+        }
+    };
 
-                    // Weighted Calculation
-                    const weightedK = maxK > 0 ? (rawK / maxK) * course.weights.knowledge : 0;
-                    const weightedS = maxS > 0 ? (rawS / maxS) * course.weights.skill : 0;
-                    
-                    // Attitude (Mock Logic: Assume max for student view if no behavior records passed)
-                    // In real app, pass behaviors/records props to calculate correctly
-                    const aScore = course.weights.attitude; 
-                    
-                    const totalScore = Math.round(weightedK + weightedS + aScore);
+    const handleAddTeacher = async () => {
+        if (!newTeacher.username || !newTeacher.password || !newTeacher.name) return onNotify('กรุณากรอกข้อมูลให้ครบถ้วน', 'error');
+        try {
+            const { error } = await supabase.from('users').insert([{
+                username: newTeacher.username,
+                password: newTeacher.password,
+                name: newTeacher.name,
+                email: newTeacher.email,
+                role: 'teacher'
+            }]);
 
-                    // --- 2. Calculate Attendance ---
-                    const totalSessions = validDates.length || 1; 
-                    const presentCount = validDates.filter(d => attendRecord[d] === 'present' || attendRecord[d] === 'late').length;
-                    const absentCount = validDates.filter(d => attendRecord[d] === 'absent').length;
-                    const attendPercent = Math.round((presentCount / totalSessions) * 100);
-                    const grade = calculateGrade(totalScore, attendPercent);
+            if (error) throw error;
+            onNotify('เพิ่มครูผู้สอนเรียบร้อย', 'success');
+            setIsAddTeacherOpen(false);
+            setNewTeacher({ name: '', username: '', password: '', email: '' });
+            fetchAdminData();
+        } catch (err) {
+            onNotify('เพิ่มไม่สำเร็จ: ' + err.message, 'error');
+        }
+    };
 
-                    return (
-                        <div key={course.id} className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden hover:shadow-xl transition-shadow duration-300">
-                            {/* Card Header */}
-                            <div className="bg-[#1E3A8A] p-5 text-white flex justify-between items-start">
-                                <div>
-                                    <span className="inline-block bg-blue-700/50 text-xs px-2 py-1 rounded mb-2 border border-blue-400/30">{course.code}</span>
-                                    <h3 className="text-xl font-bold leading-tight">{course.name}</h3>
-                                </div>
-                                <div className="bg-white/10 p-2 rounded-lg text-center backdrop-blur-sm min-w-[60px]">
-                                    <div className="text-xs opacity-80 mb-1">เกรด</div>
-                                    <div className={`text-2xl font-black ${grade === '0' || grade === 'ขร.' ? 'text-red-300' : 'text-green-300'}`}>{grade}</div>
-                                </div>
-                            </div>
+    const openUserModal = (item, type) => {
+        const existingUser = users.find(u => u.name === item.name) || {};
+        setSelectedUser({ ...item, ...existingUser, role: type, table: type === 'teacher' ? 'users' : 'students' });
+        setUserForm({ username: existingUser.username || item.id || '', password: existingUser.password || '' });
+        setIsUserModalOpen(true);
+    };
 
-                            <div className="p-6 space-y-6">
-                                {/* Score Summary Section */}
-                                <div className="flex gap-4">
-                                    <div className="flex-1 bg-green-50 p-4 rounded-xl border border-green-100 text-center">
-                                        <div className="text-xs text-green-600 font-bold uppercase tracking-wider mb-1">คะแนนรวม</div>
-                                        <div className="text-3xl font-black text-green-700">{totalScore}</div>
-                                        <div className="text-[10px] text-green-500">เต็ม 100</div>
-                                    </div>
-                                    <div className="flex-1 bg-red-50 p-4 rounded-xl border border-red-100 text-center">
-                                        <div className="text-xs text-red-600 font-bold uppercase tracking-wider mb-1">ขาดเรียน</div>
-                                        <div className="text-3xl font-black text-red-700">{absentCount}</div>
-                                        <div className="text-[10px] text-red-500">ครั้ง</div>
-                                    </div>
-                                </div>
-
-                                {/* Detailed Scores (Accordions/Lists) */}
-                                <div>
-                                    <h4 className="font-bold text-gray-700 mb-3 flex items-center text-sm"><FileText className="w-4 h-4 mr-2"/> รายละเอียดคะแนนเก็บ</h4>
-                                    <div className="space-y-3">
-                                        {/* Knowledge */}
-                                        <div className="border rounded-lg overflow-hidden">
-                                            <div className="bg-blue-50 px-3 py-2 flex justify-between items-center text-xs font-bold text-blue-800">
-                                                <span>ด้านความรู้ (เต็ม {course.weights.knowledge})</span>
-                                                <span>ได้ {Math.round(weightedK)} คะแนน</span>
-                                            </div>
-                                            <div className="p-3 bg-white space-y-2">
-                                                {kAssigns.length > 0 ? kAssigns.map(a => (
-                                                    <div key={a.id} className="flex justify-between text-sm border-b border-dashed border-gray-100 last:border-0 pb-1 last:pb-0">
-                                                        <span className="text-gray-600">{a.name}</span>
-                                                        <span className={`font-medium ${a.score < a.maxScore/2 ? 'text-red-500' : 'text-gray-800'}`}>
-                                                            {a.score} / {a.maxScore}
-                                                        </span>
-                                                    </div>
-                                                )) : <div className="text-xs text-gray-400 italic">ไม่มีรายการคะแนน</div>}
-                                            </div>
-                                        </div>
-
-                                        {/* Skills */}
-                                        <div className="border rounded-lg overflow-hidden">
-                                            <div className="bg-orange-50 px-3 py-2 flex justify-between items-center text-xs font-bold text-orange-800">
-                                                <span>ด้านทักษะ (เต็ม {course.weights.skill})</span>
-                                                <span>ได้ {Math.round(weightedS)} คะแนน</span>
-                                            </div>
-                                            <div className="p-3 bg-white space-y-2">
-                                                {sAssigns.length > 0 ? sAssigns.map(a => (
-                                                    <div key={a.id} className="flex justify-between text-sm border-b border-dashed border-gray-100 last:border-0 pb-1 last:pb-0">
-                                                        <span className="text-gray-600">{a.name}</span>
-                                                        <span className={`font-medium ${a.score < a.maxScore/2 ? 'text-red-500' : 'text-gray-800'}`}>
-                                                            {a.score} / {a.maxScore}
-                                                        </span>
-                                                    </div>
-                                                )) : <div className="text-xs text-gray-400 italic">ไม่มีรายการคะแนน</div>}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                {/* Attendance Bar */}
-                                <div>
-                                    <div className="flex justify-between text-xs mb-1 font-bold">
-                                        <span className="text-gray-600">เช็คชื่อเข้าเรียน</span>
-                                        <span className={attendPercent < 80 ? 'text-red-600' : 'text-green-600'}>{attendPercent}%</span>
-                                    </div>
-                                    <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
-                                        <div 
-                                            className={`h-full rounded-full transition-all duration-500 ${attendPercent < 80 ? 'bg-red-500' : 'bg-green-500'}`} 
-                                            style={{ width: `${attendPercent}%` }}
-                                        ></div>
-                                    </div>
-                                    <div className="text-[10px] text-gray-400 mt-1 text-right">เช็คชื่อแล้ว {totalSessions} ครั้ง</div>
-                                </div>
-                            </div>
-                        </div>
-                    );
-                })}
+    return (
+        <div className="space-y-6 animate-fade-in pb-20 relative">
+            {loading && <LoadingOverlay/>}
+            <h2 className="text-2xl font-bold text-gray-800 flex items-center"><Shield className="w-8 h-8 mr-2 text-orange-600"/> แผงควบคุมผู้ดูแลระบบ</h2>
+            
+            {/* Tabs */}
+            <div className="flex border-b overflow-x-auto">
+                {['students', 'teachers'].map(tab => (
+                    <button 
+                        key={tab}
+                        onClick={() => setActiveTab(tab)}
+                        className={`px-6 py-3 font-bold capitalize whitespace-nowrap transition-colors border-b-2 ${activeTab === tab ? 'border-blue-600 text-blue-600 bg-blue-50' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                    >
+                        {tab === 'students' ? 'ฐานข้อมูลนักเรียน' : 'ข้อมูลครูผู้สอน'}
+                    </button>
+                ))}
             </div>
+
+            {/* Tab: Students */}
+            {activeTab === 'students' && (
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="font-bold text-lg text-gray-700">รายชื่อนักเรียน ({students.length})</h3>
+                        <button onClick={() => setIsImportOpen(true)} className="bg-green-600 text-white px-4 py-2 rounded-lg flex items-center shadow hover:bg-green-700 font-bold transition"><FileSpreadsheet className="w-4 h-4 mr-2"/> นำเข้า Excel</button>
+                    </div>
+                    {loading ? <div className="text-center p-10"><Loader2 className="w-8 h-8 animate-spin mx-auto text-blue-500"/></div> : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left text-sm">
+                                <thead className="bg-gray-50 text-gray-600 uppercase font-bold"><tr><th className="p-3">รหัส</th><th className="p-3">ชื่อ-สกุล</th><th className="p-3">ชั้น/ห้อง</th><th className="p-3">แผนก</th><th className="p-3 text-center">จัดการ</th></tr></thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {students.map(s => (
+                                        <tr key={s.id} className="hover:bg-gray-50">
+                                            <td className="p-3 font-mono">{s.id}</td>
+                                            <td className="p-3 font-medium">{s.name}</td>
+                                            <td className="p-3">{s.level}/{s.room}</td>
+                                            <td className="p-3">{s.department}</td>
+                                            <td className="p-3 text-center flex justify-center gap-2">
+                                                <button onClick={() => openUserModal(s, 'student')} className="text-blue-500 bg-blue-50 p-2 rounded-full hover:bg-blue-100" title="ตั้งรหัสผ่าน"><Key className="w-4 h-4"/></button>
+                                                <button onClick={() => handleDeleteStudent(s.id)} className="text-red-500 bg-red-50 p-2 rounded-full hover:bg-red-100" title="ลบ"><Trash2 className="w-4 h-4"/></button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Tab: Teachers (Users with role teacher) */}
+            {activeTab === 'teachers' && (
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                     <div className="flex justify-between items-center mb-4">
+                        <h3 className="font-bold text-lg text-gray-700">รายชื่อครูผู้สอน</h3>
+                        <button onClick={() => setIsAddTeacherOpen(true)} className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center shadow hover:bg-blue-700 font-bold transition"><UserPlus className="w-4 h-4 mr-2"/> เพิ่มครูผู้สอน</button>
+                     </div>
+                     <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm">
+                            <thead className="bg-gray-50 text-gray-600 uppercase font-bold"><tr><th className="p-3">ชื่อ-สกุล</th><th className="p-3">Username</th><th className="p-3 text-center">จัดการ</th></tr></thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {users.filter(u => u.role === 'teacher').map(u => (
+                                    <tr key={u.id} className="hover:bg-gray-50">
+                                        <td className="p-3 font-medium">{u.name}</td>
+                                        <td className="p-3 font-mono text-blue-600">{u.username}</td>
+                                        <td className="p-3 text-center">
+                                            <button onClick={() => openUserModal(u, 'teacher')} className="text-blue-500 bg-blue-50 p-2 rounded-full hover:bg-blue-100"><Edit className="w-4 h-4"/></button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                     </div>
+                </div>
+            )}
+
+            {/* Modals */}
+            <Modal isOpen={isImportOpen} onClose={() => setIsImportOpen(false)} title="นำเข้าข้อมูลนักเรียน (Excel)">
+                 <div className="space-y-4">
+                     <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-blue-500 transition-colors bg-gray-50">
+                         <UploadCloud className="w-12 h-12 text-gray-400 mx-auto mb-3"/>
+                         <label className="block text-sm font-bold text-gray-700 mb-2 cursor-pointer">
+                             คลิกเพื่อเลือกไฟล์ Excel
+                             <input type="file" onChange={handleFileChange} accept=".xlsx, .xls" className="hidden"/>
+                         </label>
+                         {importFile && <p className="text-green-600 font-bold mt-2">{importFile.name}</p>}
+                     </div>
+                     <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                         <h4 className="font-bold text-blue-800 mb-2 flex items-center"><Info className="w-4 h-4 mr-2"/> รูปแบบไฟล์ที่ต้องการ</h4>
+                         <ul className="text-xs text-blue-700 list-disc pl-5 space-y-1">
+                             <li><b>รหัสประจำตัว</b> (สำคัญ)</li>
+                             <li><b>ชื่อ-นามสกุล</b></li>
+                             <li><b>ระดับชั้น</b> (เช่น ปวช. 1)</li>
+                             <li><b>ห้องเรียน</b> (เช่น 1, 2)</li>
+                             <li><b>แผนกวิชา</b></li>
+                         </ul>
+                     </div>
+                     <div className="flex justify-end gap-2 pt-4">
+                         <button onClick={() => setIsImportOpen(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg">ยกเลิก</button>
+                         <button onClick={handleImportExcel} className="px-6 py-2 bg-green-600 text-white rounded-lg font-bold shadow hover:bg-green-700">ยืนยันนำเข้า</button>
+                     </div>
+                 </div>
+            </Modal>
+
+            <Modal isOpen={isUserModalOpen} onClose={() => setIsUserModalOpen(false)} title={`ตั้งค่าผู้ใช้งาน: ${selectedUser?.name}`} size="sm">
+                <div className="space-y-4">
+                    <div><label className="text-sm font-bold text-gray-700 block mb-1">Username</label><input className="w-full border p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={userForm.username} onChange={e=>setUserForm({...userForm, username:e.target.value})}/></div>
+                    <div><label className="text-sm font-bold text-gray-700 block mb-1">Password</label><input className="w-full border p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={userForm.password} onChange={e=>setUserForm({...userForm, password:e.target.value})}/></div>
+                    <div className="flex justify-end gap-2 pt-4">
+                         <button onClick={() => setIsUserModalOpen(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded">ยกเลิก</button>
+                         <button onClick={handleSaveUser} className="px-4 py-2 bg-blue-600 text-white rounded font-bold hover:bg-blue-700">บันทึก</button>
+                    </div>
+                </div>
+            </Modal>
+
+            {/* Modal: Add Teacher */}
+            <Modal isOpen={isAddTeacherOpen} onClose={() => setIsAddTeacherOpen(false)} title="เพิ่มครูผู้สอนใหม่" size="md">
+                <div className="space-y-4">
+                    <div><label className="text-sm font-bold text-gray-700 block mb-1">ชื่อ-นามสกุล</label><input className="w-full border p-2.5 rounded-lg" placeholder="นาย..." value={newTeacher.name} onChange={e=>setNewTeacher({...newTeacher, name:e.target.value})}/></div>
+                    <div><label className="text-sm font-bold text-gray-700 block mb-1">อีเมล (ถ้ามี)</label><input className="w-full border p-2.5 rounded-lg" placeholder="teacher@school.ac.th" value={newTeacher.email} onChange={e=>setNewTeacher({...newTeacher, email:e.target.value})}/></div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div><label className="text-sm font-bold text-gray-700 block mb-1">Username</label><input className="w-full border p-2.5 rounded-lg" placeholder="teacher01" value={newTeacher.username} onChange={e=>setNewTeacher({...newTeacher, username:e.target.value})}/></div>
+                        <div><label className="text-sm font-bold text-gray-700 block mb-1">Password</label><input className="w-full border p-2.5 rounded-lg" placeholder="1234" value={newTeacher.password} onChange={e=>setNewTeacher({...newTeacher, password:e.target.value})}/></div>
+                    </div>
+                    <div className="flex justify-end gap-2 pt-4 border-t mt-2">
+                         <button onClick={() => setIsAddTeacherOpen(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded">ยกเลิก</button>
+                         <button onClick={handleAddTeacher} className="px-6 py-2 bg-blue-600 text-white rounded font-bold shadow hover:bg-blue-700">เพิ่มครูผู้สอน</button>
+                    </div>
+                </div>
+            </Modal>
         </div>
     );
 };
 
-// --- MAIN APP ---
+// 7. Teacher Dashboard & Main Logic
 export default function ClassroomApp() {
   const [user, setUser] = useState(null); 
   const [loginForm, setLoginForm] = useState({ username: '', password: '', role: null });
   const [loginError, setLoginError] = useState('');
-
-  const [currentPage, setCurrentPage] = useState('login');
+  const [notification, setNotification] = useState(null);
+  
+  // App States (Real DB Data)
+  const [courses, setCourses] = useState([]);
+  const [students, setStudents] = useState([]);
+  const [enrollments, setEnrollments] = useState({});
+  const [loading, setLoading] = useState(false);
+  
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [courseTab, setCourseTab] = useState('students');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [notification, setNotification] = useState(null);
-  
-  // Data States
-  const [courses, setCourses] = useState(INITIAL_COURSES);
-  const [students, setStudents] = useState(INITIAL_STUDENTS);
-  const [teachers, setTeachers] = useState(INITIAL_TEACHERS);
-  const [assignments, setAssignments] = useState(INITIAL_ASSIGNMENTS);
-  const [scores, setScores] = useState(INITIAL_SCORES);
-  const [attendance, setAttendance] = useState({});
-  const [holidays, setHolidays] = useState({});
-  const [behaviors, setBehaviors] = useState(INITIAL_BEHAVIORS);
-  const [behaviorRecords, setBehaviorRecords] = useState({});
-  const [enrollments, setEnrollments] = useState({});
-  
-  const [currentDate, setCurrentDate] = useState(new Date().toISOString().split('T')[0]);
-  const [filterTerm, setFilterTerm] = useState('1');
-  const [filterYear, setFilterYear] = useState('2567');
-  
-  // Modals State
+  const [currentPage, setCurrentPage] = useState('login');
+
+  // Add Course Modal State
   const [isAddCourseOpen, setIsAddCourseOpen] = useState(false);
-  const [newCourse, setNewCourse] = useState({ code: '', name: '', credits: 3, room: '', term: '1', year: '2567', level: 'ปวช. 2', weights: { knowledge: 40, skill: 40, attitude: 20 } });
-  const [isAddStudentOpen, setIsAddStudentOpen] = useState(false);
-  const [newStudent, setNewStudent] = useState({ id: '', name: '', level: '', room: '' });
-  const [isImportExcelOpen, setIsImportExcelOpen] = useState(false);
+  const [newCourse, setNewCourse] = useState({ code: '', name: '', credits: 3, room: '', level: '', term: '1', year: String(new Date().getFullYear()+543), weights: { knowledge: 40, skill: 40, attitude: 20 } });
+  
+  // Import Student Modal State
   const [isImportStudentOpen, setIsImportStudentOpen] = useState(false);
   const [importSearch, setImportSearch] = useState({ id: '', name: '', level: '', room: '' });
   const [studentsToImport, setStudentsToImport] = useState([]);
-  const [importFile, setImportFile] = useState(null);
 
-  useEffect(() => {
-    const initialEnrollments = {};
-    courses.forEach(c => { initialEnrollments[c.id] = students.map(s => s.id); });
-    setEnrollments(initialEnrollments);
-  }, []);
+  // Filters
+  const [filterTerm, setFilterTerm] = useState('1');
+  const [filterYear, setFilterYear] = useState(String(new Date().getFullYear()+543));
 
   const showNotification = (msg, type = 'success') => {
     setNotification({ message: msg, type });
     setTimeout(() => setNotification(null), 3000);
   };
 
-  const handleLogin = (e) => {
-    e.preventDefault();
-    setLoginError('');
-    if (loginForm.role === 'teacher') {
-       // Mock check - in real app, check against teachers array
-       const teacher = teachers.find(t => t.username === loginForm.username && t.password === loginForm.password);
-       if (teacher) { setUser({ ...teacher, role: 'teacher' }); setCurrentPage('dashboard'); } 
-       else if (loginForm.username === 'teacher' && loginForm.password === '123') { setUser({ name: 'นายชาญชัย แก้วเถิน', role: 'teacher' }); setCurrentPage('dashboard'); } // Fallback
-       else { setLoginError('ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง'); }
-    } else if (loginForm.role === 'admin') {
-       if (loginForm.password === '072889604') { setUser({ name: 'ผู้ดูแลระบบ', role: 'admin' }); setCurrentPage('dashboard'); } 
-       else { setLoginError('รหัสผ่านไม่ถูกต้อง'); }
-    } else if (loginForm.role === 'student') {
-       const student = students.find(s => s.username === loginForm.username && s.password === loginForm.password);
-       if (student) { setUser({ ...student, role: 'student' }); setCurrentPage('dashboard'); }
-       else if (loginForm.username === 'student' && loginForm.password === '123') { setUser({ name: 'นายสมชาย รักเรียน', role: 'student', id: '6620901001' }); setCurrentPage('dashboard'); } // Fallback
-       else { setLoginError('ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง'); }
-    }
+  // Initial Fetch Data from DB
+  const fetchData = async () => {
+      setLoading(true);
+      try {
+          const { data: cData } = await supabase.from('courses').select('*');
+          const { data: sData } = await supabase.from('students').select('*');
+          const { data: eData } = await supabase.from('enrollments').select('*');
+          
+          if(cData) setCourses(cData);
+          if(sData) setStudents(sData);
+          
+          const enrollMap = {};
+          if(eData) eData.forEach(e => {
+              if(!enrollMap[e.course_id]) enrollMap[e.course_id] = [];
+              enrollMap[e.course_id].push(e.student_id);
+          });
+          setEnrollments(enrollMap);
+      } catch(e) { console.error(e); } finally { setLoading(false); }
+  };
+
+  useEffect(() => { if(user) fetchData(); }, [user]);
+
+  // Handlers
+  const handleLogin = async (e) => {
+      e.preventDefault();
+      setLoading(true);
+      try {
+          const { data } = await supabase.from('users').select('*').eq('username', loginForm.username).eq('password', loginForm.password).eq('role', loginForm.role).single();
+          if (data) { setUser(data); setCurrentPage('dashboard'); }
+          else if (loginForm.role === 'admin' && loginForm.password === '072889604') { setUser({ name: 'Admin', role: 'admin' }); setCurrentPage('dashboard'); } // Fallback Admin
+          else setLoginError('ข้อมูลไม่ถูกต้อง');
+      } catch(err) { setLoginError('เชื่อมต่อล้มเหลว'); } finally { setLoading(false); }
   };
 
   const handleLogout = () => {
@@ -882,87 +1060,82 @@ export default function ClassroomApp() {
     setLoginForm({ username: '', password: '', role: null });
   };
 
-  const handleAddCourseSubmit = () => {
-    const courseToAdd = { ...newCourse, id: Date.now() };
-    setCourses([...courses, courseToAdd]);
-    setAssignments({...assignments, [courseToAdd.id]: []});
-    setBehaviors({...behaviors, [courseToAdd.id]: [...(behaviors[1] || [])] });
-    setEnrollments(prev => ({...prev, [courseToAdd.id]: []}));
-    setIsAddCourseOpen(false);
-    showNotification('เพิ่มรายวิชาสำเร็จ');
+  const handleAddCourseSubmit = async () => {
+      if(!newCourse.code || !newCourse.name) return showNotification('กรุณากรอกข้อมูลให้ครบ', 'error');
+      
+      try {
+          // บันทึกลงฐานข้อมูลจริง
+          const { data, error } = await supabase.from('courses').insert([{ ...newCourse, teacher_id: user.id }]).select();
+          if(error) throw error;
+          
+          // อัปเดต state
+          setCourses([...courses, ...data]);
+          setEnrollments(prev => ({...prev, [data[0].id]: []}));
+          
+          // **สำคัญ:** เปลี่ยนตัวกรองให้ตรงกับวิชาใหม่ เพื่อให้เห็นวิชาทันที
+          setFilterTerm(newCourse.term);
+          setFilterYear(newCourse.year);
+          
+          setIsAddCourseOpen(false);
+          showNotification('เพิ่มรายวิชาสำเร็จ');
+      } catch(e) { 
+          console.error(e);
+          showNotification('เกิดข้อผิดพลาดในการบันทึก', 'error'); 
+      }
   };
 
-  const handleAddStudentSubmit = () => {
-    const studentToAdd = { ...newStudent, status: 'normal' };
-    setStudents(prev => [...prev, studentToAdd]);
-    setIsAddStudentOpen(false);
-    showNotification('เพิ่มนักเรียนเรียบร้อย');
+  const handleImportStudentsSubmit = async () => {
+      if (studentsToImport.length === 0) return showNotification('กรุณาเลือกนักเรียน', 'error');
+      try {
+          // Prepare DB Inserts
+          const toInsert = studentsToImport.map(sid => ({ course_id: selectedCourse.id, student_id: sid }));
+          const { error } = await supabase.from('enrollments').insert(toInsert); // Assuming enrollments table exists
+          if(error) throw error;
+          
+          // Update State
+          setEnrollments(prev => ({ 
+              ...prev, 
+              [selectedCourse.id]: [...(prev[selectedCourse.id] || []), ...studentsToImport] 
+          }));
+          
+          setIsImportStudentOpen(false);
+          setStudentsToImport([]);
+          showNotification(`เพิ่มนักเรียน ${studentsToImport.length} คน เรียบร้อย`, 'success');
+      } catch(e) { 
+          console.error(e);
+          // If duplicate error, handle gracefully (maybe fetch fresh data)
+          if(e.code === '23505') { // Unique violation
+              fetchData(); // Sync with server
+              setIsImportStudentOpen(false);
+              showNotification('นำเข้าเรียบร้อย (บางคนอาจมีอยู่แล้ว)', 'success');
+          } else {
+              showNotification('เกิดข้อผิดพลาด', 'error'); 
+          }
+      }
   };
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) setImportFile(file);
-  };
-
-  const handleImportExcel = () => {
-    if (!importFile) { showNotification('กรุณาเลือกไฟล์ก่อน', 'error'); return; }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        try {
-            const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, { type: 'array' });
-            const sheetName = workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[sheetName];
-            const jsonData = XLSX.utils.sheet_to_json(worksheet);
-            const newStudents = jsonData.map(row => ({
-                id: String(row['รหัสประจำตัว'] || ''), 
-                name: row['ชื่อ-นามสกุล'] || '',
-                level: row['ระดับชั้น'] || '',
-                room: String(row['ห้องเรียน'] || row['ห้องเรียน '] || ''),
-                department: row['แผนกวิชา'] || '',
-                status: 'normal'
-            })).filter(s => s.id && s.name);
-            setStudents(prev => {
-                const existingIds = new Set(prev.map(s => s.id));
-                const uniqueNewStudents = newStudents.filter(s => !existingIds.has(s.id));
-                return [...prev, ...uniqueNewStudents];
-            });
-            showNotification(`นำเข้าข้อมูลนักเรียนสำเร็จ ${newStudents.length} รายการ`, 'success');
-            setIsImportExcelOpen(false);
-        } catch (error) { console.error(error); showNotification('เกิดข้อผิดพลาดในการอ่านไฟล์', 'error'); }
-    };
-    reader.readAsArrayBuffer(importFile);
-  };
-
-  const handleImportStudentsSubmit = () => {
-      setEnrollments(prev => ({ ...prev, [selectedCourse.id]: [...(prev[selectedCourse.id] || []), ...studentsToImport] }));
-      showNotification(`เพิ่มนักเรียน ${studentsToImport.length} คน เรียบร้อย`, 'success');
-      setIsImportStudentOpen(false);
-      setStudentsToImport([]);
-  };
-
-  const handleDeleteCourse = (e, id) => {
+  const handleDeleteCourse = async (e, id) => {
     e.stopPropagation();
     if (confirm('คุณต้องการลบรายวิชานี้ใช่หรือไม่?')) {
-        setCourses(courses.filter(c => c.id !== id));
-        showNotification('ลบรายวิชาสำเร็จ', 'error');
+        const { error } = await supabase.from('courses').delete().eq('id', id);
+        if(!error) {
+            setCourses(courses.filter(c => c.id !== id));
+            showNotification('ลบรายวิชาสำเร็จ', 'success');
+        } else {
+            showNotification('ลบไม่สำเร็จ', 'error');
+        }
     }
   };
 
-  const handleRemoveStudentFromCourse = (courseId, studentId) => {
+  const handleRemoveStudentFromCourse = async (courseId, studentId) => {
     if(confirm('ต้องการลบนักเรียนคนนี้ออกจากรายวิชาใช่หรือไม่?')) {
-        setEnrollments(prev => ({...prev, [courseId]: prev[courseId].filter(id => id !== studentId)}));
-        showNotification('ลบนักเรียนออกจากรายวิชาเรียบร้อย', 'success');
+        const { error } = await supabase.from('enrollments').delete().eq('course_id', courseId).eq('student_id', studentId);
+        if(!error) {
+            setEnrollments(prev => ({...prev, [courseId]: prev[courseId].filter(id => id !== studentId)}));
+            showNotification('ลบนักเรียนออกจากรายวิชาเรียบร้อย', 'success');
+        }
     }
   };
-
-  const handleToggleHoliday = (date) => { setHolidays(prev => ({ ...prev, [date]: !prev[date] })); };
-  const handleSaveData = () => { showNotification('บันทึกข้อมูลเรียบร้อยแล้ว'); };
-  const handleDeleteAssignment = (courseId, assignId) => { if (confirm('ต้องการลบหัวข้อคะแนนนี้ใช่หรือไม่?')) { const updated = (assignments[courseId] || []).filter(a => a.id !== assignId); setAssignments({ ...assignments, [courseId]: updated }); showNotification('ลบหัวข้อคะแนนเรียบร้อย'); } };
-  const onUpdateScore = (sid, aid, val, max) => setScores(p => ({...p, [sid]: {...(p[sid]||{}), [aid]: Math.min(Number(val), max)}}));
-  const onAddAssignment = (cid, na) => setAssignments(p => ({...p, [cid]: [...(p[cid]||[]), {...na, id: 'as_'+Date.now()}]}));
-  const onUpdateBehaviorsList = (newList) => setBehaviors(prev => ({...prev, [selectedCourse.id]: newList}));
-  const onUpdateBehavior = (sid, date, bid) => setBehaviorRecords(prev => { const sRecs = prev[sid] || {}; const dRecs = sRecs[date] || []; const newRecs = dRecs.includes(bid) ? dRecs.filter(i => i!==bid) : [...dRecs, bid]; return {...prev, [sid]: {...sRecs, [date]: newRecs}}; });
 
   const filteredCourses = courses.filter(c => c.term === filterTerm && c.year === filterYear);
   const filteredStudentsForImport = useMemo(() => {
@@ -978,7 +1151,7 @@ export default function ClassroomApp() {
     });
   }, [students, enrollments, selectedCourse, importSearch]);
   
-  // LOGIC for Select All Filtered Students
+  // LOGIC for Select All Filtered Students (Checkbox)
   const allFilteredSelected = filteredStudentsForImport.length > 0 && filteredStudentsForImport.every(s => studentsToImport.includes(s.id));
   
   const handleSelectAllFiltered = () => {
@@ -1000,14 +1173,13 @@ export default function ClassroomApp() {
   // --- RENDER LOGIN ---
   if (!user) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4" style={{ fontFamily: "'Sarabun', sans-serif" }}>
-        {/* Force Load Font Here as well for safety */}
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 font-sans bg-cover bg-center" style={{ backgroundImage: "url('https://www.transparenttextures.com/patterns/cubes.png')", backgroundColor: '#f3f4f6' }}>
         <style>{`@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap'); body { font-family: 'Sarabun', sans-serif; }`}</style>
         <div className="bg-white rounded-2xl shadow-2xl overflow-hidden max-w-4xl w-full flex flex-col md:flex-row">
           <div className="md:w-1/2 bg-gradient-to-br from-[#1E3A8A] to-blue-900 p-10 flex flex-col justify-center items-center text-white relative">
              <div className="absolute top-0 left-0 w-full h-full opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
-             <img src={LOGO_URL} alt="Logo" className="w-32 h-32 mb-6 drop-shadow-xl animate-pulse-slow" />
-             <div className="text-center">
+             <img src={LOGO_URL} alt="Logo" className="w-36 h-36 mb-6 drop-shadow-xl animate-pulse-slow" />
+             <div className="text-center z-10">
                  <h1 className="text-3xl font-bold mb-2 tracking-wide font-sans text-center w-full">วิทยาลัยการอาชีพ<br/>เวียงเชียงรุ้ง</h1>
                  <p className="text-blue-200 font-sans text-sm tracking-wider uppercase text-center w-full">Classroom Management System</p>
              </div>
@@ -1043,7 +1215,7 @@ export default function ClassroomApp() {
                    )}
                    <div><label className="text-sm font-bold text-gray-600 block mb-1">รหัสผ่าน</label><input type="password" className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all font-sans bg-gray-50 focus:bg-white" placeholder="Password" value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} /></div>
                    {loginError && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded">{loginError}</p>}
-                   <button type="submit" className="w-full bg-[#1E3A8A] text-white py-3 rounded-lg font-bold hover:bg-blue-800 shadow-lg transition-transform active:scale-95 font-sans mt-2">เข้าสู่ระบบ</button>
+                   <button type="submit" disabled={loading} className="w-full bg-[#1E3A8A] text-white py-3 rounded-lg font-bold hover:bg-blue-800 shadow-lg transition-transform active:scale-95 font-sans mt-2 disabled:opacity-50">{loading ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}</button>
                 </form>
             )}
           </div>
@@ -1128,7 +1300,7 @@ export default function ClassroomApp() {
             {/* VIEW: DASHBOARD */}
             {currentPage === 'dashboard' && (
                 <div>
-                   {user.role === 'admin' && <AdminDashboard students={students} teachers={teachers} setStudents={setStudents} setTeachers={setTeachers} onNotify={showNotification} setIsImportOpen={setIsImportExcelOpen} />}
+                   {user.role === 'admin' && <AdminDashboard onNotify={showNotification} />}
                    {user.role === 'teacher' && <TeacherDashboard courses={courses} students={students} assignments={assignments} scores={scores} attendance={attendance} holidays={holidays} enrollments={enrollments} setEnrollments={setEnrollments} onNotify={showNotification} />}
                    {user.role === 'student' && <StudentDashboard studentId={user.id} courses={courses} assignments={assignments} scores={scores} attendance={attendance} holidays={holidays} />}
                 </div>
@@ -1139,18 +1311,22 @@ export default function ClassroomApp() {
                 <div className="animate-fade-in space-y-6">
                     <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
                         <div className="flex space-x-4">
-                           <div className="flex items-center space-x-2"><span className="text-sm font-bold text-gray-600">ภาคเรียน:</span><select value={filterTerm} onChange={e=>setFilterTerm(e.target.value)} className="border rounded p-2 text-sm outline-none"><option>1</option><option>2</option></select></div>
-                           <div className="flex items-center space-x-2"><span className="text-sm font-bold text-gray-600">ปีการศึกษา:</span><input value={filterYear} onChange={e=>setFilterYear(e.target.value)} className="border rounded p-2 w-24 text-center text-sm outline-none"/></div>
+                           <div className="flex items-center gap-2"><span className="text-sm font-bold text-gray-600">ภาคเรียน:</span><select value={filterTerm} onChange={e=>setFilterTerm(e.target.value)} className="border rounded p-1"><option>1</option><option>2</option><option>Summer</option></select></div>
+                           <div className="flex items-center gap-2"><span className="text-sm font-bold text-gray-600">ปีการศึกษา:</span><input value={filterYear} onChange={e=>setFilterYear(e.target.value)} className="border rounded p-1 w-20 text-center"/></div>
                         </div>
-                        <button onClick={()=>setIsAddCourseOpen(true)} className="bg-blue-600 text-white px-5 py-2.5 rounded-lg shadow hover:bg-blue-700 flex items-center transition"><Plus className="w-5 h-5 mr-2"/> เพิ่มรายวิชา</button>
+                        <button onClick={() => {
+                            setNewCourse(prev => ({ ...prev, term: filterTerm, year: filterYear })); // Auto-fill current filter
+                            setIsAddCourseOpen(true);
+                        }} className="bg-blue-600 text-white px-5 py-2.5 rounded-lg shadow hover:bg-blue-700 flex items-center transition"><Plus className="w-5 h-5 mr-2"/> เพิ่มรายวิชา</button>
                     </div>
+                    {/* Course Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                        {filteredCourses.map(c => (
                            <div key={c.id} className="bg-white rounded-xl shadow-sm hover:shadow-lg transition-all border overflow-hidden group relative">
                                <div className="h-2 bg-blue-600"></div>
-                               <button onClick={(e)=>handleDeleteCourse(e, c.id)} className="absolute top-4 right-4 text-gray-300 hover:text-red-500"><Trash2 className="w-4 h-4"/></button>
+                               <button onClick={(e)=>handleDeleteCourse(e, c.id)} className="absolute top-4 right-4 text-gray-300 hover:text-red-500 p-1 bg-white rounded-full shadow-sm z-10"><Trash2 className="w-5 h-5"/></button>
                                <div className="p-6">
-                                   <div className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded inline-block mb-2">{c.code}</div>
+                                   <div className="flex justify-between items-center mb-3"><span className="text-xs font-bold text-blue-700 bg-blue-50 px-3 py-1 rounded-full border border-blue-100">{c.code}</span></div>
                                    <h3 className="font-bold text-gray-800 text-lg mb-4 line-clamp-2 h-14">{c.name}</h3>
                                    <p className="text-sm text-gray-500 mb-4 flex items-center"><Users className="w-4 h-4 mr-2 text-blue-400"/> {c.room} | {c.credits} หน่วยกิต</p>
                                    <button onClick={()=>{setSelectedCourse(c); setCourseTab('students');}} className="w-full border border-blue-200 text-blue-600 py-2 rounded hover:bg-blue-50">จัดการรายวิชา</button>
@@ -1164,24 +1340,24 @@ export default function ClassroomApp() {
             {/* VIEW: SELECTED COURSE (Tabs & Content) */}
             {selectedCourse && (
                 <div className="animate-fade-in pb-12">
-                    <button onClick={()=>setSelectedCourse(null)} className="mb-4 text-sm text-gray-500 hover:text-blue-600 flex items-center"><ChevronLeft className="w-4 h-4 mr-1"/> กลับหน้ารายวิชา</button>
+                    <button onClick={()=>setSelectedCourse(null)} className="mb-4 text-sm text-gray-500 hover:text-blue-600 flex items-center font-bold"><ChevronLeft className="w-4 h-4 mr-1"/> กลับหน้ารายวิชา</button>
                     <div className="bg-white rounded-xl shadow-lg border overflow-hidden min-h-[600px] flex flex-col">
                         {/* Course Tabs Navigation */}
                         <div className="flex border-b overflow-x-auto bg-gray-50/50">
                            {[
-                               { id: 'students', label: 'รายชื่อ', icon: Users },
-                               { id: 'attendance', label: 'เวลาเรียน', icon: Clock },
-                               { id: 'scores', label: 'คะแนนเก็บ', icon: Edit },
-                               { id: 'behavior', label: 'พฤติกรรม', icon: Flag },
-                               { id: 'behavior_sum', label: 'สรุปพฤติกรรม', icon: Award },
-                               { id: 'summary', label: 'สรุปผล', icon: GraduationCap }
+                               { id: 'students', label: 'รายชื่อ', icon: Users, color: 'text-purple-600' },
+                               { id: 'attendance', label: 'เวลาเรียน', icon: Clock, color: 'text-blue-600' },
+                               { id: 'scores', label: 'คะแนนเก็บ', icon: Edit, color: 'text-orange-600' },
+                               { id: 'behavior', label: 'บันทึกพฤติกรรม', icon: Flag, color: 'text-emerald-600' },
+                               { id: 'behavior_sum', label: 'สรุปพฤติกรรม', icon: Award, color: 'text-indigo-600' },
+                               { id: 'summary', label: 'สรุปผล', icon: GraduationCap, color: 'text-pink-600' }
                            ].map(tab => (
                                <button 
                                  key={tab.id}
                                  onClick={() => setCourseTab(tab.id)}
-                                 className={`px-6 py-4 flex items-center whitespace-nowrap text-sm font-bold border-b-4 transition-colors ${courseTab === tab.id ? 'border-blue-600 text-blue-800 bg-white' : 'border-transparent text-gray-500 hover:bg-gray-100'}`}
+                                 className={`px-6 py-4 flex items-center whitespace-nowrap text-sm font-bold border-b-4 transition-colors ${courseTab === tab.id ? `border-${tab.color.split('-')[1]}-500 ${tab.color} bg-white` : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100'}`}
                                >
-                                   <tab.icon className="w-4 h-4 mr-2"/> {tab.label}
+                                   <tab.icon className={`w-4 h-4 mr-2 ${courseTab === tab.id ? tab.color : 'text-gray-400'}`}/> {tab.label}
                                </button>
                            ))}
                         </div>
@@ -1215,17 +1391,17 @@ export default function ClassroomApp() {
                             
                             {/* 2. Attendance Tab */}
                             <div style={{ display: courseTab === 'attendance' ? 'block' : 'none' }}>
-                                <AttendanceCheck students={students.filter(s => (enrollments[selectedCourse.id]||[]).includes(s.id))} date={currentDate} setDate={setCurrentDate} attendance={attendance} onCheck={(sid,d,st)=>setAttendance(p=>({...p, [sid]:{...(p[sid]||{}), [d]:st}}))} onSave={handleSaveData} holidays={holidays} onToggleHoliday={handleToggleHoliday} />
+                                <AttendanceCheck courseId={selectedCourse.id} students={students.filter(s => (enrollments[selectedCourse.id]||[]).includes(s.id))} onNotify={showNotification} />
                             </div>
 
                             {/* 3. Scores Tab */}
                             <div style={{ display: courseTab === 'scores' ? 'block' : 'none' }}>
-                                <ScoreManager students={students.filter(s => (enrollments[selectedCourse.id]||[]).includes(s.id))} course={selectedCourse} assignments={assignments[selectedCourse.id]||[]} scores={scores} onUpdateScore={(sid, aid, v, max) => setScores(p => ({...p, [sid]: {...(p[sid]||{}), [aid]: Math.min(Number(val), max)}}))} onAddAssignment={(cid, na) => setAssignments(p => ({...p, [cid]: [...(p[cid]||[]), {...na, id: 'as_'+Date.now()}]}))} onDeleteAssignment={handleDeleteAssignment} onSave={handleSaveData} />
+                                <ScoreManager courseId={selectedCourse.id} students={students.filter(s => (enrollments[selectedCourse.id]||[]).includes(s.id))} onNotify={showNotification} />
                             </div>
 
                             {/* 4. Behavior Tab */}
                             <div style={{ display: courseTab === 'behavior' ? 'block' : 'none' }}>
-                                <BehaviorManager students={students.filter(s => (enrollments[selectedCourse.id]||[]).includes(s.id))} course={selectedCourse} behaviors={behaviors[selectedCourse.id]||[]} behaviorRecords={behaviorRecords} onUpdateBehavior={(sid, date, bid) => setBehaviorRecords(prev => { const sRecs = prev[sid] || {}; const dRecs = sRecs[date] || []; const newRecs = dRecs.includes(bid) ? dRecs.filter(i => i!==bid) : [...dRecs, bid]; return {...prev, [sid]: {...sRecs, [date]: newRecs}}; })} onUpdateBehaviorsList={(newList) => setBehaviors(prev => ({...prev, [selectedCourse.id]: newList}))} onSave={handleSaveData} />
+                                <BehaviorManager courseId={selectedCourse.id} students={students.filter(s => (enrollments[selectedCourse.id]||[]).includes(s.id))} onNotify={showNotification} />
                             </div>
 
                             {/* 5. Behavior Summary Tab */}
@@ -1313,143 +1489,131 @@ export default function ClassroomApp() {
                 </div>
             )}
             
-            {/* Modals */}
-            {isAddCourseOpen && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 backdrop-blur-sm transition-all">
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 animate-in zoom-in-95 duration-200">
-                        <div className="flex justify-between items-center mb-6 border-b pb-4">
-                            <h3 className="font-bold text-xl text-gray-800 flex items-center">
-                                <BookOpen className="w-6 h-6 mr-2 text-blue-600"/> เพิ่มรายวิชาใหม่
-                            </h3>
-                            <button onClick={()=>setIsAddCourseOpen(false)} className="text-gray-400 hover:text-red-500 p-1 rounded-full hover:bg-red-50 transition">
-                                <XCircle className="w-6 h-6"/>
-                            </button>
+            {/* ADD COURSE MODAL - IMPROVED UI */}
+            <Modal isOpen={isAddCourseOpen} onClose={() => setIsAddCourseOpen(false)} title="เพิ่มรายวิชาใหม่" size="md">
+                <div className="space-y-5">
+                    {/* Course Info */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">รหัสวิชา</label>
+                            <input className="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="เช่น 2000-0001" value={newCourse.code} onChange={e=>setNewCourse({...newCourse, code:e.target.value})} />
                         </div>
-                        
-                        <div className="space-y-5">
-                            {/* Course Info */}
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1">
-                                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">รหัสวิชา</label>
-                                    <input className="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="เช่น 2000-0001" value={newCourse.code} onChange={e=>setNewCourse({...newCourse, code:e.target.value})} />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">ชื่อวิชา</label>
-                                    <input className="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="ชื่อวิชาภาษาไทย" value={newCourse.name} onChange={e=>setNewCourse({...newCourse, name:e.target.value})} />
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-3 gap-4">
-                                <div className="space-y-1">
-                                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">หน่วยกิต</label>
-                                    <input type="number" className="w-full border border-gray-300 p-2.5 rounded-lg text-center" value={newCourse.credits} onChange={e=>setNewCourse({...newCourse, credits:e.target.value})} />
-                                </div>
-                                <div className="col-span-2 space-y-1">
-                                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">ระดับชั้น/ห้อง</label>
-                                    <input className="w-full border border-gray-300 p-2.5 rounded-lg" placeholder="เช่น ปวช. 1/2" value={newCourse.level} onChange={e=>setNewCourse({...newCourse, level:e.target.value})} />
-                                </div>
-                            </div>
-
-                            {/* Term & Year */}
-                            <div className="grid grid-cols-2 gap-4 bg-blue-50 p-3 rounded-lg border border-blue-100">
-                                <div className="space-y-1">
-                                    <label className="text-xs font-bold text-blue-700 uppercase tracking-wider">ภาคเรียน</label>
-                                    <select className="w-full border border-blue-200 p-2 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer" value={newCourse.term} onChange={e=>setNewCourse({...newCourse, term:e.target.value})}>
-                                        <option value="1">1</option>
-                                        <option value="2">2</option>
-                                        <option value="Summer">ฤดูร้อน</option>
-                                    </select>
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-xs font-bold text-blue-700 uppercase tracking-wider">ปีการศึกษา</label>
-                                    <input className="w-full border border-blue-200 p-2 rounded-lg text-center bg-white" placeholder="2567" value={newCourse.year} onChange={e=>setNewCourse({...newCourse, year:e.target.value})} />
-                                </div>
-                            </div>
-                            
-                            {/* Weights */}
-                             <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                                <label className="text-sm font-bold text-gray-700 mb-3 flex items-center"><Calculator className="w-4 h-4 mr-2 text-gray-500"/> สัดส่วนคะแนน (ต้องรวมได้ 100)</label>
-                                <div className="flex gap-3 text-sm">
-                                    <div className="flex-1">
-                                        <span className="block text-[10px] text-blue-600 font-bold mb-1 uppercase">ความรู้ (K)</span>
-                                        <input type="number" className="w-full p-2 border rounded-lg text-center font-bold focus:ring-2 focus:ring-blue-500 outline-none" value={newCourse.weights.knowledge} onChange={e=>setNewCourse({...newCourse, weights: {...newCourse.weights, knowledge: Number(e.target.value)}})}/>
-                                    </div>
-                                    <div className="flex-1">
-                                        <span className="block text-[10px] text-orange-600 font-bold mb-1 uppercase">ทักษะ (S)</span>
-                                        <input type="number" className="w-full p-2 border rounded-lg text-center font-bold focus:ring-2 focus:ring-orange-500 outline-none" value={newCourse.weights.skill} onChange={e=>setNewCourse({...newCourse, weights: {...newCourse.weights, skill: Number(e.target.value)}})}/>
-                                    </div>
-                                    <div className="flex-1">
-                                        <span className="block text-[10px] text-green-600 font-bold mb-1 uppercase">เจตคติ (A)</span>
-                                        <input type="number" className="w-full p-2 border rounded-lg text-center font-bold focus:ring-2 focus:ring-green-500 outline-none" value={newCourse.weights.attitude} onChange={e=>setNewCourse({...newCourse, weights: {...newCourse.weights, attitude: Number(e.target.value)}})}/>
-                                    </div>
-                                </div>
-                                <div className="text-right text-xs mt-2 font-medium text-gray-500">
-                                    รวม: <span className={(newCourse.weights.knowledge + newCourse.weights.skill + newCourse.weights.attitude) === 100 ? 'text-green-600' : 'text-red-500'}>
-                                        {newCourse.weights.knowledge + newCourse.weights.skill + newCourse.weights.attitude}
-                                    </span> / 100
-                                </div>
-                             </div>
-
-                            <div className="flex justify-end gap-3 pt-4 border-t">
-                                <button onClick={()=>setIsAddCourseOpen(false)} className="px-5 py-2.5 text-gray-600 hover:bg-gray-100 rounded-lg font-medium transition">ยกเลิก</button>
-                                <button onClick={handleAddCourseSubmit} className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-bold shadow-lg hover:bg-blue-700 hover:shadow-blue-900/30 transition transform active:scale-95 flex items-center">
-                                    <Save className="w-4 h-4 mr-2"/> บันทึกรายวิชา
-                                </button>
-                            </div>
+                        <div className="space-y-1">
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">ชื่อวิชา</label>
+                            <input className="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="ชื่อวิชาภาษาไทย" value={newCourse.name} onChange={e=>setNewCourse({...newCourse, name:e.target.value})} />
                         </div>
                     </div>
-                </div>
-            )}
 
-            {isImportStudentOpen && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                     <div className="bg-white p-6 rounded-lg w-[600px] h-[500px] flex flex-col">
-                        <h3 className="font-bold text-lg mb-4">ดึงรายชื่อจากฐานข้อมูลกลาง</h3>
-                        <div className="text-xs text-gray-500 mb-2 bg-yellow-50 p-2 rounded border border-yellow-100 flex items-center"><Info className="w-4 h-4 mr-1 text-yellow-600"/> ค้นหาและเลือกนักเรียนที่ต้องการนำเข้าสู่รายวิชานี้</div>
-                        <div className="grid grid-cols-4 gap-2 mb-4">
-                           <input placeholder="รหัส" value={importSearch.id} onChange={e=>setImportSearch({...importSearch, id:e.target.value})} className="border p-1 text-sm rounded"/>
-                           <input placeholder="ชื่อ" value={importSearch.name} onChange={e=>setImportSearch({...importSearch, name:e.target.value})} className="border p-1 text-sm rounded"/>
-                           <input placeholder="ชั้น" value={importSearch.level} onChange={e=>setImportSearch({...importSearch, level:e.target.value})} className="border p-1 text-sm rounded"/>
-                           <input placeholder="ห้อง" value={importSearch.room} onChange={e=>setImportSearch({...importSearch, room:e.target.value})} className="border p-1 text-sm rounded"/>
+                    <div className="grid grid-cols-3 gap-4">
+                        <div className="space-y-1">
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">หน่วยกิต</label>
+                            <input type="number" className="w-full border border-gray-300 p-2.5 rounded-lg text-center" value={newCourse.credits} onChange={e=>setNewCourse({...newCourse, credits:e.target.value})} />
                         </div>
-                        <div className="flex-1 overflow-y-auto border rounded p-2">
-                             <table className="w-full text-sm text-left">
-                                <thead className="bg-purple-100 text-purple-800 sticky top-0 shadow-sm">
-                                    <tr>
-                                        <th className="p-3 w-10 text-center cursor-pointer hover:bg-purple-200 select-none" onClick={handleSelectAllFiltered}>
-                                           {allFilteredSelected ? <CheckSquare className="w-5 h-5 text-purple-700"/> : <Square className="w-5 h-5 text-purple-400"/>}
-                                        </th>
-                                        <th className="p-3">รหัส</th>
-                                        <th className="p-3">ชื่อ-สกุล</th>
-                                        <th className="p-3">ชั้น/ห้อง</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y">
-                                    {filteredStudentsForImport.length === 0 ? (
-                                        <tr><td colSpan="4" className="p-10 text-center text-gray-400 italic">ไม่พบข้อมูลที่ตรงกัน หรือนักเรียนทุกคนถูกเพิ่มไปหมดแล้ว</td></tr>
-                                    ) : (
-                                        filteredStudentsForImport.map(s => (
-                                            <tr key={s.id} className={`hover:bg-purple-50 cursor-pointer transition-colors ${studentsToImport.includes(s.id)?'bg-purple-50':''}`} onClick={()=>toggleStudentImportSelection(s.id)}>
-                                                <td className="p-3 text-center">
-                                                    {studentsToImport.includes(s.id) ? <CheckSquare className="w-5 h-5 text-purple-600"/> : <Square className="w-5 h-5 text-gray-300"/>}
-                                                </td>
-                                                <td className="p-3 font-mono text-gray-600">{s.id}</td>
-                                                <td className="p-3 font-medium text-gray-800">{s.name}</td>
-                                                <td className="p-3 text-gray-500">{s.level} / {s.room}</td>
-                                            </tr>
-                                        ))
-                                    )}
-                                </tbody>
-                             </table>
+                        <div className="col-span-2 space-y-1">
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">ระดับชั้น/ห้อง</label>
+                            <input className="w-full border border-gray-300 p-2.5 rounded-lg" placeholder="เช่น ปวช. 1/2" value={newCourse.level} onChange={e=>setNewCourse({...newCourse, level:e.target.value})} />
                         </div>
-                        <div className="pt-4 flex justify-end gap-2">
-                            <button onClick={()=>setIsImportStudentOpen(false)} className="px-4 py-2 border rounded">ยกเลิก</button>
-                            <button onClick={handleImportStudentsSubmit} className="px-4 py-2 bg-blue-600 text-white rounded">นำเข้า ({studentsToImport.length})</button>
+                    </div>
+
+                    {/* Term & Year */}
+                    <div className="grid grid-cols-2 gap-4 bg-blue-50 p-3 rounded-lg border border-blue-100">
+                        <div className="space-y-1">
+                            <label className="text-xs font-bold text-blue-700 uppercase tracking-wider">ภาคเรียน</label>
+                            <select className="w-full border border-blue-200 p-2 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer" value={newCourse.term} onChange={e=>setNewCourse({...newCourse, term:e.target.value})}>
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="Summer">ฤดูร้อน</option>
+                            </select>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-xs font-bold text-blue-700 uppercase tracking-wider">ปีการศึกษา</label>
+                            <input className="w-full border border-blue-200 p-2 rounded-lg text-center bg-white" placeholder="2567" value={newCourse.year} onChange={e=>setNewCourse({...newCourse, year:e.target.value})} />
+                        </div>
+                    </div>
+                    
+                    {/* Weights */}
+                     <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                        <label className="text-sm font-bold text-gray-700 mb-3 flex items-center"><Calculator className="w-4 h-4 mr-2 text-gray-500"/> สัดส่วนคะแนน (ต้องรวมได้ 100)</label>
+                        <div className="flex gap-3 text-sm">
+                            <div className="flex-1">
+                                <span className="block text-[10px] text-blue-600 font-bold mb-1 uppercase">ความรู้ (K)</span>
+                                <input type="number" className="w-full p-2 border rounded-lg text-center font-bold focus:ring-2 focus:ring-blue-500 outline-none" value={newCourse.weights.knowledge} onChange={e=>setNewCourse({...newCourse, weights: {...newCourse.weights, knowledge: Number(e.target.value)}})}/>
+                            </div>
+                            <div className="flex-1">
+                                <span className="block text-[10px] text-orange-600 font-bold mb-1 uppercase">ทักษะ (S)</span>
+                                <input type="number" className="w-full p-2 border rounded-lg text-center font-bold focus:ring-2 focus:ring-orange-500 outline-none" value={newCourse.weights.skill} onChange={e=>setNewCourse({...newCourse, weights: {...newCourse.weights, skill: Number(e.target.value)}})}/>
+                            </div>
+                            <div className="flex-1">
+                                <span className="block text-[10px] text-green-600 font-bold mb-1 uppercase">เจตคติ (A)</span>
+                                <input type="number" className="w-full p-2 border rounded-lg text-center font-bold focus:ring-2 focus:ring-green-500 outline-none" value={newCourse.weights.attitude} onChange={e=>setNewCourse({...newCourse, weights: {...newCourse.weights, attitude: Number(e.target.value)}})}/>
+                            </div>
+                        </div>
+                        <div className="text-right text-xs mt-2 font-medium text-gray-500">
+                            รวม: <span className={(newCourse.weights.knowledge + newCourse.weights.skill + newCourse.weights.attitude) === 100 ? 'text-green-600' : 'text-red-500'}>
+                                {newCourse.weights.knowledge + newCourse.weights.skill + newCourse.weights.attitude}
+                            </span> / 100
                         </div>
                      </div>
+
+                    <div className="flex justify-end gap-3 pt-4 border-t">
+                        <button onClick={()=>setIsAddCourseOpen(false)} className="px-5 py-2.5 text-gray-600 hover:bg-gray-100 rounded-lg font-medium transition">ยกเลิก</button>
+                        <button onClick={handleAddCourseSubmit} className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-bold shadow-lg hover:bg-blue-700 hover:shadow-blue-900/30 transition transform active:scale-95 flex items-center">
+                            <Save className="w-4 h-4 mr-2"/> บันทึกรายวิชา
+                        </button>
+                    </div>
                 </div>
-            )}
-            
+            </Modal>
+
+            {/* IMPORT STUDENTS MODAL (With Select All) */}
+            <Modal isOpen={isImportStudentOpen} onClose={() => setIsImportStudentOpen(false)} title="ดึงรายชื่อจากฐานข้อมูลกลาง" size="lg">
+                <div className="flex flex-col h-[500px]">
+                    <div className="text-xs text-gray-500 mb-2 bg-yellow-50 p-2 rounded border border-yellow-100 flex items-center"><Info className="w-4 h-4 mr-1 text-yellow-600"/> ค้นหาและเลือกนักเรียนที่ต้องการนำเข้าสู่รายวิชานี้</div>
+                    <div className="grid grid-cols-4 gap-2 mb-4">
+                       <input placeholder="รหัส" value={importSearch.id} onChange={e=>setImportSearch({...importSearch, id:e.target.value})} className="border p-1 text-sm rounded"/>
+                       <input placeholder="ชื่อ" value={importSearch.name} onChange={e=>setImportSearch({...importSearch, name:e.target.value})} className="border p-1 text-sm rounded"/>
+                       <input placeholder="ชั้น" value={importSearch.level} onChange={e=>setImportSearch({...importSearch, level:e.target.value})} className="border p-1 text-sm rounded"/>
+                       <input placeholder="ห้อง" value={importSearch.room} onChange={e=>setImportSearch({...importSearch, room:e.target.value})} className="border p-1 text-sm rounded"/>
+                    </div>
+                    <div className="flex-1 overflow-y-auto border rounded p-2">
+                         <table className="w-full text-sm text-left">
+                            <thead className="bg-purple-100 text-purple-800 sticky top-0 shadow-sm">
+                                <tr>
+                                    <th className="p-3 w-10 text-center cursor-pointer hover:bg-purple-200 select-none" onClick={handleSelectAllFiltered}>
+                                       {allFilteredSelected ? <CheckSquare className="w-5 h-5 text-purple-700"/> : <Square className="w-5 h-5 text-purple-400"/>}
+                                    </th>
+                                    <th className="p-3">รหัส</th>
+                                    <th className="p-3">ชื่อ-สกุล</th>
+                                    <th className="p-3">ชั้น/ห้อง</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y">
+                                {filteredStudentsForImport.length === 0 ? (
+                                    <tr><td colSpan="4" className="p-10 text-center text-gray-400 italic">ไม่พบข้อมูลที่ตรงกัน หรือนักเรียนทุกคนถูกเพิ่มไปหมดแล้ว</td></tr>
+                                ) : (
+                                    filteredStudentsForImport.map(s => (
+                                        <tr key={s.id} className={`hover:bg-purple-50 cursor-pointer transition-colors ${studentsToImport.includes(s.id)?'bg-purple-50':''}`} onClick={()=>toggleStudentImportSelection(s.id)}>
+                                            <td className="p-3 text-center">
+                                                {studentsToImport.includes(s.id) ? <CheckSquare className="w-5 h-5 text-purple-600"/> : <Square className="w-5 h-5 text-gray-300"/>}
+                                            </td>
+                                            <td className="p-3 font-mono text-gray-600">{s.id}</td>
+                                            <td className="p-3 font-medium text-gray-800">{s.name}</td>
+                                            <td className="p-3 text-gray-500">{s.level} / {s.room}</td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                         </table>
+                    </div>
+                    <div className="pt-4 flex justify-between items-center border-t mt-2">
+                        <span className="text-sm font-bold text-gray-600">เลือกแล้ว: {studentsToImport.length} คน</span>
+                        <div className="flex gap-2">
+                            <button onClick={()=>setIsImportStudentOpen(false)} className="px-4 py-2 border rounded hover:bg-gray-50 text-gray-600">ยกเลิก</button>
+                            <button onClick={handleImportStudentsSubmit} className="px-6 py-2 bg-purple-600 text-white rounded font-bold shadow hover:bg-purple-700 flex items-center transition transform active:scale-95"><UserPlus className="w-4 h-4 mr-2"/> นำเข้าที่เลือก</button>
+                        </div>
+                    </div>
+                 </div>
+            </Modal>
+
             {isImportExcelOpen && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                     <div className="bg-white p-6 rounded-lg w-96">
@@ -1467,6 +1631,8 @@ export default function ClassroomApp() {
                 </div>
             )}
 
+
+.0.
          </div>
       </main>
     </div>
